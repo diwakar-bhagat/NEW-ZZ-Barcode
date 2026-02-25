@@ -20,6 +20,7 @@ export type LandingNavProps = LandingSectionProps & {
   githubLabel: string;
   githubHref: string;
   appHref: string;
+  onOpenAppClick?: () => void;
 };
 
 export type LandingHeroProps = LandingSectionProps & {
@@ -37,6 +38,8 @@ export type LandingHeroProps = LandingSectionProps & {
   floatingShortcutTitle: string;
   appHref: string;
   loginHref: string;
+  onOpenAppClick?: () => void;
+  onConnectOdooClick?: () => void;
 };
 
 /** Icon key for LandingFeatures (resolved in client). Use: printer | search | zap */
@@ -47,6 +50,8 @@ export type LandingFeatureItem = {
   description: string;
   imageSrc: string;
   imageAlt: string;
+  imageWidth?: number;
+  imageHeight?: number;
   /** Tailwind classes for icon box, e.g. "bg-gradient-to-br from-primary to-primary/60" */
   iconClassName?: string;
   /** Icon identifier (serializable). Resolved to Lucide icon in client. */
@@ -63,6 +68,11 @@ export type LandingHowItWorksProps = LandingSectionProps & {
   processLabel: string;
   title: string;
   subtitle: string;
+  faqTitle?: string;
+  faqItems?: Array<{
+    question: string;
+    answer: string;
+  }>;
   steps: Array<{
     number: number;
     title: string;
@@ -86,6 +96,30 @@ export type LandingOdooProps = LandingSectionProps & {
   methodLabel: string;
   ctaLabel: string;
   loginHref: string;
+  onConnectOdooClick?: () => void;
+};
+
+export type LandingResourcesItem = {
+  slug: string;
+  title: string;
+  summary: string;
+};
+
+export type LandingResourcesProps = LandingSectionProps & {
+  locale: string;
+  title: string;
+  subtitle: string;
+  description: string;
+  resources: LandingResourcesItem[];
+  appLabel: string;
+  appHref: string;
+  connectLabel: string;
+  connectHref: string;
+  moreLabel: string;
+  moreHref: string;
+  resourcesIndexLabel: string;
+  blogReadLabel: string;
+  blogHref: string;
 };
 
 /** Icon key for LandingUseCases (resolved in client). Use: package | barChart3 */
@@ -96,6 +130,8 @@ export type LandingUseCaseItem = {
   description: string;
   imageSrc: string;
   imageAlt: string;
+  imageWidth?: number;
+  imageHeight?: number;
   /** Tailwind classes for icon wrapper, e.g. "bg-primary/10 text-primary" */
   iconBgClass: string;
   /** Icon identifier (serializable). Resolved to Lucide icon in client. */
@@ -127,6 +163,8 @@ export type LandingFooterProps = LandingSectionProps & {
   tagline: string;
   productLabel: string;
   editorLabel: string;
+  resourcesLabel: string;
+  blogLabel: string;
   loginLabel: string;
   developersLabel: string;
   githubLabel: string;
@@ -137,4 +175,6 @@ export type LandingFooterProps = LandingSectionProps & {
   loginHref: string;
   githubHref: string;
   issuesHref: string;
+  resourcesHref: string;
+  blogHref: string;
 };

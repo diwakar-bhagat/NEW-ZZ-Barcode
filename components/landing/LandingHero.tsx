@@ -1,19 +1,17 @@
-"use client";
-
+import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Check } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { LandingContainer } from "./LandingContainer";
 import { LandingSection } from "./LandingSection";
-import { LandingKicker } from "./LandingKicker";
 import { LandingFloatingCard } from "./LandingFloatingCard";
 
 import styles from "./LandingHero.module.css";
 import type { LandingHeroProps } from "./types";
 
 export function LandingHero({
-  locale: _locale,
+  locale,
   heroTitle,
   heroDescription,
   heroCta,
@@ -30,6 +28,8 @@ export function LandingHero({
   className = "",
   style,
 }: LandingHeroProps) {
+  void locale;
+
   return (
     <LandingSection
       className={`${styles.hero} ${className}`}
@@ -62,11 +62,16 @@ export function LandingHero({
           <div className={styles.collageWrap}>
             {/* Main mockup image */}
             <div className={styles.mockupWrap}>
-              <img
+              <Image
                 src="/brand/mockup-hero.png"
                 alt={previewLabel}
                 className={styles.mockupImage}
+                width={1280}
+                height={720}
+                priority
+                fetchPriority="high"
                 loading="eager"
+                sizes="(min-width: 1024px) 48vw, 92vw"
               />
             </div>
 

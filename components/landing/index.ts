@@ -6,6 +6,7 @@ export { LandingHowItWorks } from "./LandingHowItWorks";
 export { LandingOdoo } from "./LandingOdoo";
 export { LandingUseCases } from "./LandingUseCases";
 export { LandingOpenSource } from "./LandingOpenSource";
+export { LandingResources } from "./LandingResources";
 export { LandingFooter } from "./LandingFooter";
 
 // Base components

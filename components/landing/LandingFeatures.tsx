@@ -1,12 +1,10 @@
-"use client";
-
+import Image from "next/image";
 import type React from "react";
 import { Printer, Search, Zap } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { LandingContainer } from "./LandingContainer";
 import { LandingSection } from "./LandingSection";
-import { LandingKicker } from "./LandingKicker";
 import { LandingCard } from "./LandingCard";
 
 import styles from "./LandingFeatures.module.css";
@@ -45,11 +43,14 @@ export function LandingFeatures({
                 </div>
                 <p className={styles.cardDescription}>{feature.description}</p>
                 <div className={styles.cardImageWrap}>
-                  <img
+                  <Image
                     src={feature.imageSrc}
                     alt={feature.imageAlt}
                     className={styles.cardImage}
+                    width={feature.imageWidth ?? 400}
+                    height={feature.imageHeight ?? 300}
                     loading="lazy"
+                    sizes="(min-width: 1024px) 30vw, (min-width: 768px) 45vw, 90vw"
                   />
                 </div>
               </LandingCard>

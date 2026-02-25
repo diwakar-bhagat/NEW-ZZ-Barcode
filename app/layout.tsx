@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { headers } from "next/headers";
+import Script from "next/script";
 
+import { WebVitalsTracker } from "@/components/analytics/WebVitalsTracker";
 import { defaultLocale, isLocale } from "@/lib/i18n";
 import "./globals.css";
 import Providers from "./providers";
@@ -37,12 +39,28 @@ export default async function RootLayout({
   const headerList = await headers();
   const localeHeader = headerList.get("x-next-intl-locale");
   const locale = localeHeader && isLocale(localeHeader) ? localeHeader : defaultLocale;
+  const gaMeasurementId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID?.trim();
 
   return (
     <html lang={locale} suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        {gaMeasurementId ? (
+          <>
+            <Script
+              src={`https://www.googletagmanager.com/gtag/js?id=${gaMeasurementId}`}
+              strategy="afterInteractive"
+            />
+            <Script id="gtag-init" strategy="afterInteractive">
+              {`window.dataLayer = window.dataLayer || [];
+window.gtag = function(){dataLayer.push(arguments);}
+gtag("js", new Date());
+gtag("config", "${gaMeasurementId}", { anonymize_ip: true });`}
+            </Script>
+          </>
+        ) : null}
+        <WebVitalsTracker locale={locale} />
         <Providers>{children}</Providers>
       </body>
     </html>

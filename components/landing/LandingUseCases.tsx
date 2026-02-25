@@ -1,12 +1,10 @@
-"use client";
-
+import Image from "next/image";
 import type React from "react";
 import { BarChart3, Package } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { LandingContainer } from "./LandingContainer";
 import { LandingSection } from "./LandingSection";
-import { LandingKicker } from "./LandingKicker";
 import { LandingCard } from "./LandingCard";
 
 import styles from "./LandingUseCases.module.css";
@@ -37,7 +35,15 @@ export function LandingUseCases({
             return (
               <LandingCard key={i} className={styles.card} padding="none">
                 <div className={styles.cardImage}>
-                  <img src={item.imageSrc} alt={item.imageAlt} loading="lazy" />
+                  <Image
+                    src={item.imageSrc}
+                    alt={item.imageAlt}
+                    className={styles.cardPhoto}
+                    width={item.imageWidth ?? 600}
+                    height={item.imageHeight ?? 400}
+                    loading="lazy"
+                    sizes="(min-width: 768px) 42vw, 90vw"
+                  />
                 </div>
                 <div className={styles.cardContent}>
                   <div className={cn(styles.cardIcon, item.iconBgClass)}>

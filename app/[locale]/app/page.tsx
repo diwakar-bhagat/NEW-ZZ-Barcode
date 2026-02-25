@@ -1,7 +1,17 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  memo,
+  type MouseEvent,
+  type PointerEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
@@ -16,7 +26,6 @@ import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
-  ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { Input } from "@/components/ui/input";
@@ -51,6 +60,7 @@ import {
   useEditorStore,
 } from "@/lib/editorStore";
 import { computeGrid, type LayoutSettings } from "@/lib/labelGrid";
+import { trackPageView, trackStartPrint } from "@/lib/analytics";
 
 type SearchResult = {
   id: number;
@@ -123,10 +133,7 @@ export default function AppPage() {
   const tCommon = useTranslations("Common");
   const isMobile = useIsMobile();
   const previewScale = isMobile ? 0.6 : 1;
-  const logoSrc =
-    process.env.NODE_ENV === "development"
-      ? `/brand/labbely-logo.png?ts=${Date.now()}`
-      : "/brand/labbely-logo.png";
+  const logoSrc = "/brand/labbely-logo.png";
   
   const layout = useEditorStore((state) => state.layout);
   const pages = useEditorStore((state) => state.pages);
@@ -193,6 +200,7 @@ export default function AppPage() {
 
   const debouncedSearch = useDebouncedValue(searchQuery, 300);
   const grid = useMemo(() => computeGrid(layout), [layout]);
+  const selectedCellCount = selectedCellIds.length;
   const barcodeHeightPx = useMemo(
     () => (layout.barcodeHeightMm ?? 12) * 3.78,
     [layout.barcodeHeightMm],
@@ -200,6 +208,48 @@ export default function AppPage() {
   const cellPaddingCm = layout.cellPaddingCm ?? 0;
   const offsetX = layout.offsetXCm ?? 0;
   const offsetY = layout.offsetYCm ?? 0;
+  const selectedCellSet = useMemo(() => new Set(selectedCellIds), [selectedCellIds]);
+  const activeProduct = useMemo(
+    () => products.find((product) => product.id === activeProductId) ?? null,
+    [activeProductId, products],
+  );
+  const productById = useMemo(() => {
+    const map = new Map<string, Product>();
+    products.forEach((product) => map.set(product.id, product));
+    return map;
+  }, [products]);
+  const pageIndexById = useMemo(() => {
+    const indexById = new Map<string, number>();
+    pages.forEach((page, index) => {
+      indexById.set(page.id, index);
+    });
+    return indexById;
+  }, [pages]);
+  const pageCellIds = useMemo(() => {
+    const map = new Map<number, string[]>();
+    pages.forEach((page, index) => {
+      map.set(index, page.cells.map((cell) => cell.id));
+    });
+    return map;
+  }, [pages]);
+  const cellLocations = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        pageIndex: number;
+        cellIndex: number;
+      }
+    >();
+    pages.forEach((page, pageIndex) => {
+      for (let i = 0; i < page.cells.length; i += 1) {
+        map.set(page.cells[i].id, {
+          pageIndex,
+          cellIndex: i,
+        });
+      }
+    });
+    return map;
+  }, [pages]);
 
   useEffect(() => {
     syncPages(grid.labelsPerPage, pagesToRender);
@@ -263,10 +313,18 @@ export default function AppPage() {
   }, [isMobile]);
 
   useEffect(() => {
-    if (selectedCellIds.length === 0) {
+    if (selectedCellCount === 0) {
       setPopoverOpen(false);
     }
-  }, [selectedCellIds.length]);
+  }, [selectedCellCount]);
+
+  useEffect(() => {
+    const path = `/${locale}/app`;
+    trackPageView(locale, path, "view_app", {
+      page_location: path,
+      page_title: "Editor - Labbely",
+    });
+  }, [locale]);
 
   useEffect(() => {
     const handleMouseUp = () => {
@@ -283,7 +341,7 @@ export default function AppPage() {
       }
       longPressRef.current = null;
     };
-    const handlePointerMove = (event: PointerEvent) => {
+    const handlePointerMove = (event: globalThis.PointerEvent) => {
       if (!longPressRef.current || longPressRef.current.triggered) {
         return;
       }
@@ -353,7 +411,7 @@ export default function AppPage() {
   }, [clearSelection, clearSelected, isMobile, pages, redo, selectedCellIds.length, setSelectedCellIds, undo]);
 
   const handleCellPointerDown = (
-    event: React.PointerEvent,
+    event: PointerEvent,
     pageIndex: number,
     cellIndex: number,
     cellId: string,
@@ -405,21 +463,24 @@ export default function AppPage() {
     setDragSelectState(null);
   };
 
-  const fetchProducts = async (query: string): Promise<SearchResult[]> => {
-    const response = await fetch(`/api/products/search?q=${encodeURIComponent(query)}`);
-    if (!response.ok) {
-      const payload = await response.json().catch(() => null);
-      const errorCode = payload?.errorCode ?? payload?.error;
-      if (errorCode === "rate_limited" || errorCode === "Rate limit exceeded") {
-        throw new Error(t("searchRateLimit"));
+  const fetchProducts = useCallback(
+    async (query: string): Promise<SearchResult[]> => {
+      const response = await fetch(`/api/products/search?q=${encodeURIComponent(query)}`);
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        const errorCode = payload?.errorCode ?? payload?.error;
+        if (errorCode === "rate_limited" || errorCode === "Rate limit exceeded") {
+          throw new Error(t("searchRateLimit"));
+        }
+        if (errorCode === "unauthorized" || errorCode === "Unauthorized") {
+          throw new Error(t("searchUnauthorized"));
+        }
+        throw new Error(t("searchError"));
       }
-      if (errorCode === "unauthorized" || errorCode === "Unauthorized") {
-        throw new Error(t("searchUnauthorized"));
-      }
-      throw new Error(t("searchError"));
-    }
-    return response.json();
-  };
+      return response.json();
+    },
+    [t],
+  );
 
   const {
     data: searchResults = [],
@@ -434,10 +495,11 @@ export default function AppPage() {
     staleTime: 30_000,
   });
 
-  const activeProduct = products.find((product) => product.id === activeProductId) ?? null;
-  const previewPages = showAllPages
-    ? pages
-    : pages.filter((_, index) => index === Math.max(0, previewPage - 1));
+  const previewPages = useMemo(
+    () =>
+      showAllPages ? pages : pages.filter((_, index) => index === Math.max(0, previewPage - 1)),
+    [pages, previewPage, showAllPages],
+  );
   const assignedCounts = useMemo(() => {
     const map = new Map<string, number>();
     pages.forEach((page) => {
@@ -448,17 +510,21 @@ export default function AppPage() {
         map.set(cell.productId, (map.get(cell.productId) ?? 0) + 1);
       });
     });
+
     return map;
   }, [pages]);
 
-  const isDuplicateProduct = (product: Product) =>
-    products.some(
-      (item) =>
-        item.id === product.id ||
-        (item.barcode && product.barcode && item.barcode === product.barcode)
-    );
+  const isDuplicateProduct = useCallback(
+    (product: Product) =>
+      products.some(
+        (item) =>
+          item.id === product.id ||
+          (item.barcode && product.barcode && item.barcode === product.barcode),
+      ),
+    [products],
+  );
 
-  const addManualProduct = () => {
+  const addManualProduct = useCallback(() => {
     setManualError("");
     if (!manualName.trim() || !manualBarcode.trim()) {
       setManualError(t("manualRequired"));
@@ -484,30 +550,33 @@ export default function AppPage() {
     setManualName("");
     setManualBarcode("");
     setManualSku("");
-  };
+  }, [addProduct, isDuplicateProduct, manualBarcode, manualName, manualSku, t]);
 
-  const addOdooProduct = (result: SearchResult) => {
-    const displayName = result.display_name ?? result.name ?? t("unnamedProduct");
-    const newProduct: Product = {
-      id: `odoo-${result.id}`,
-      name: displayName,
-      barcode: result.barcode ?? "",
-      sku: result.default_code ?? undefined,
-      source: "odoo",
-    };
-    if (isDuplicateProduct(newProduct)) {
-      toast.info(t("productAlreadyAdded"));
-      return;
-    }
-    addProduct(newProduct);
-    toast.success(t("productAdded", { name: newProduct.name }));
-    setRecentOdooResults((current) => {
-      const deduped = current.filter((item) => item.id !== result.id);
-      return [result, ...deduped].slice(0, 5);
-    });
-  };
+  const addOdooProduct = useCallback(
+    (result: SearchResult) => {
+      const displayName = result.display_name ?? result.name ?? t("unnamedProduct");
+      const newProduct: Product = {
+        id: `odoo-${result.id}`,
+        name: displayName,
+        barcode: result.barcode ?? "",
+        sku: result.default_code ?? undefined,
+        source: "odoo",
+      };
+      if (isDuplicateProduct(newProduct)) {
+        toast.info(t("productAlreadyAdded"));
+        return;
+      }
+      addProduct(newProduct);
+      toast.success(t("productAdded", { name: newProduct.name }));
+      setRecentOdooResults((current) => {
+        const deduped = current.filter((item) => item.id !== result.id);
+        return [result, ...deduped].slice(0, 5);
+      });
+    },
+    [addProduct, isDuplicateProduct, t],
+  );
 
-  const addSampleProduct = () => {
+  const addSampleProduct = useCallback(() => {
     const sampleProduct: Product = {
       id: `sample-${Date.now()}`,
       name: t("sampleProductName"),
@@ -521,17 +590,18 @@ export default function AppPage() {
     }
     addProduct(sampleProduct);
     toast.success(t("productAdded", { name: sampleProduct.name }));
-  };
+  }, [addProduct, isDuplicateProduct, t]);
 
-  const handlePrint = () => {
+  const handlePrint = useCallback(() => {
     if (pagesToRender > 3) {
       const confirmed = window.confirm(t("printConfirm", { count: pagesToRender }));
       if (!confirmed) {
         return;
       }
     }
+    trackStartPrint(locale, pagesToRender);
     window.print();
-  };
+  }, [locale, pagesToRender, t]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -543,127 +613,143 @@ export default function AppPage() {
     }
   }, []);
 
-  const dismissGuide = () => {
+  const dismissGuide = useCallback(() => {
     setShowGuideBanner(false);
     if (typeof window !== "undefined") {
       window.localStorage.setItem("labbely:guide", "true");
     }
-  };
+  }, []);
 
-  const getRangeCellIds = (pageIndex: number, startIndex: number, endIndex: number) => {
-    const page = pages[pageIndex];
-    if (!page) {
-      return [];
-    }
-    const [start, end] = startIndex < endIndex ? [startIndex, endIndex] : [endIndex, startIndex];
-    return page.cells.slice(start, end + 1).map((cell) => cell.id);
-  };
+  const getRangeCellIds = useCallback(
+    (pageIndex: number, startIndex: number, endIndex: number) => {
+      const ids = pageCellIds.get(pageIndex);
+      if (!ids) {
+        return [];
+      }
+      const [start, end] = startIndex < endIndex ? [startIndex, endIndex] : [endIndex, startIndex];
+      return ids.slice(start, end + 1);
+    },
+    [pageCellIds],
+  );
 
-  const handleCellMouseDown = (
-    event: React.MouseEvent,
-    pageIndex: number,
-    cellIndex: number,
-    cellId: string,
-  ) => {
-    event.stopPropagation();
-    if (isMobile) {
-      const isSelected = selectedCellIds.includes(cellId);
-      if (isSelected) {
+  const handleCellMouseDown = useCallback(
+    (
+      event: MouseEvent,
+      pageIndex: number,
+      cellIndex: number,
+      cellId: string,
+    ) => {
+      event.stopPropagation();
+      if (isMobile) {
+        const isSelected = selectedCellSet.has(cellId);
+        if (isSelected) {
+          setSelectedCellIds(selectedCellIds.filter((id) => id !== cellId));
+        } else {
+          setSelectedCellIds([cellId]);
+        }
+        setDragSelectState(null);
+        return;
+      }
+      // No hacer nada si es clic derecho
+      if (event.button === 2) {
+        return;
+      }
+      if (event.shiftKey && lastSelectedCellId) {
+        const startLocation = cellLocations.get(lastSelectedCellId);
+        if (!startLocation || startLocation.pageIndex !== pageIndex) {
+          toggleCellSelection(cellId);
+          return;
+        }
+        const range = getRangeCellIds(pageIndex, startLocation.cellIndex, cellIndex);
+        toggleCellSelection(cellId, range);
+        return;
+      }
+
+      if (event.metaKey || event.ctrlKey) {
+        toggleCellSelection(cellId);
+        return;
+      }
+
+      const isInitiallySelected = selectedCellSet.has(cellId);
+      if (isInitiallySelected) {
         setSelectedCellIds(selectedCellIds.filter((id) => id !== cellId));
       } else {
-        setSelectedCellIds([cellId]);
+        toggleCellSelection(cellId, [cellId]);
       }
-      setDragSelectState(null);
-      return;
-    }
-    // No hacer nada si es clic derecho
-    if (event.button === 2) {
-      return;
-    }
-    if (event.shiftKey && lastSelectedCellId) {
-      const page = pages[pageIndex];
-      if (!page) {
-        toggleCellSelection(cellId);
-        return;
-      }
-      const fromIndex = page.cells.findIndex((cell) => cell.id === lastSelectedCellId);
-      if (fromIndex === -1) {
-        toggleCellSelection(cellId);
-        return;
-      }
-      const range = getRangeCellIds(pageIndex, fromIndex, cellIndex);
-      toggleCellSelection(cellId, range);
-      return;
-    }
-
-    if (event.metaKey || event.ctrlKey) {
-      toggleCellSelection(cellId);
-      return;
-    }
-
-    const isInitiallySelected = selectedCellIds.includes(cellId);
-    if (isInitiallySelected) {
-      setSelectedCellIds(selectedCellIds.filter((id) => id !== cellId));
-    } else {
-      toggleCellSelection(cellId, [cellId]);
-    }
-    setDragSelectState({ 
-      active: true, 
-      pageIndex, 
-      startIndex: cellIndex,
-      shouldSelect: !isInitiallySelected,
-    });
-  };
-
-  const handleCellMouseEnter = (pageIndex: number, cellIndex: number, cellId: string) => {
-    if (isMobile) {
-      return;
-    }
-    if (!dragSelectState?.active || dragSelectState.pageIndex !== pageIndex) {
-      return;
-    }
-    const range = getRangeCellIds(pageIndex, dragSelectState.startIndex, cellIndex);
-    if (dragSelectState.shouldSelect) {
-      const newSelected = Array.from(new Set([...selectedCellIds, ...range]));
-      setSelectedCellIds(newSelected);
-    } else {
-      const newSelected = selectedCellIds.filter((id) => !range.includes(id));
-      setSelectedCellIds(newSelected);
-    }
-  };
-
-  const handleModeChange = async (value: string) => {
-    if (value === "odoo") {
-      const response = await fetch("/api/auth/session", {
-        cache: "no-store",
-        credentials: "include",
+      setDragSelectState({
+        active: true,
+        pageIndex,
+        startIndex: cellIndex,
+        shouldSelect: !isInitiallySelected,
       });
-      if (!response.ok) {
-        router.push(`/${locale}/login`);
+    },
+    [
+      cellLocations,
+      getRangeCellIds,
+      isMobile,
+      lastSelectedCellId,
+      selectedCellIds,
+      selectedCellSet,
+      setDragSelectState,
+      setSelectedCellIds,
+      toggleCellSelection,
+    ],
+  );
+
+  const handleCellMouseEnter = useCallback(
+    (pageIndex: number, cellIndex: number) => {
+      if (isMobile) {
         return;
       }
-      const payload = (await response.json()) as { authenticated?: boolean };
-      if (!payload.authenticated) {
-        router.push(`/${locale}/login`);
+      if (!dragSelectState?.active || dragSelectState.pageIndex !== pageIndex) {
         return;
       }
-    }
-    setMode(value as "odoo" | "manual");
-  };
+      const range = getRangeCellIds(pageIndex, dragSelectState.startIndex, cellIndex);
+      const rangeSet = new Set(range);
+      if (dragSelectState.shouldSelect) {
+        setSelectedCellIds(Array.from(new Set([...selectedCellIds, ...range])));
+      } else {
+        setSelectedCellIds(selectedCellIds.filter((id) => !rangeSet.has(id)));
+      }
+    },
+    [dragSelectState, getRangeCellIds, isMobile, selectedCellIds, setSelectedCellIds],
+  );
+
+  const handleModeChange = useCallback(
+    async (value: string) => {
+      if (value === "odoo") {
+        const response = await fetch("/api/auth/session", {
+          cache: "no-store",
+          credentials: "include",
+        });
+        if (!response.ok) {
+          router.push(`/${locale}/login`);
+          return;
+        }
+        const payload = (await response.json()) as { authenticated?: boolean };
+        if (!payload.authenticated) {
+          router.push(`/${locale}/login`);
+          return;
+        }
+      }
+      setMode(value as "odoo" | "manual");
+    },
+    [locale, router],
+  );
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       {isSessionLoading ? (
         <div className="fixed inset-0 z-[900] bg-white">
           <div className="flex min-h-svh flex-col items-center justify-center gap-6 px-6 text-center">
-            <img
+            <Image
               src="/brand/labbely-icon.png"
               alt="Labbely"
               width={56}
               height={56}
               className="h-14 w-14"
-              loading="eager"
-              decoding="async"
+              priority
+              sizes="56px"
             />
             <div className="space-y-2">
               <div className="mx-auto h-4 w-56 rounded-full bg-slate-200/90 animate-pulse" />
@@ -683,14 +769,13 @@ export default function AppPage() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center justify-between gap-3">
             <Link href={`/${locale}`} aria-label="Labbely home">
-              <img
+              <Image
                 src={logoSrc}
                 alt="Labbely"
                 width={200}
                 height={48}
                 className="h-8 w-auto"
-                loading="eager"
-                decoding="async"
+                sizes="200px"
               />
             </Link>
             <div className="flex items-center gap-2 sm:hidden">
@@ -750,7 +835,7 @@ export default function AppPage() {
                           isFetching={isFetching}
                           isError={isError}
                           error={error}
-                        refetch={refetch}
+                          refetch={refetch}
                           searchResults={searchResults}
                           addOdooProduct={addOdooProduct}
                           manualName={manualName}
@@ -762,14 +847,14 @@ export default function AppPage() {
                           setManualSku={setManualSku}
                           addManualProduct={addManualProduct}
                           addSampleProduct={addSampleProduct}
-                          products={products}
+                          productById={productById}
                           activeProductId={activeProductId}
                           setActiveProductId={setActiveProductId}
                           fillNextAvailable={fillNextAvailable}
                           fillNextAvailableCount={fillNextAvailableCount}
                           fillAllPages={fillAllPages}
                           removeProduct={removeProduct}
-                          selectedCellIds={selectedCellIds}
+                          selectedCellCount={selectedCellCount}
                           popoverOpen={popoverOpen}
                           setPopoverOpen={setPopoverOpen}
                           assignToSelected={assignToSelected}
@@ -844,11 +929,11 @@ export default function AppPage() {
       <main className="flex w-full max-w-none flex-col items-stretch gap-0 px-0 py-0 pb-20 lg:pb-0 lg:flex-row">
         <aside className="no-print order-1 hidden w-full lg:block lg:w-96 lg:shrink-0">
           <div className="flex h-full min-h-[calc(100vh-56px)] flex-col space-y-6 border-r border-slate-200 bg-white px-6 py-4">
-            <SidebarContent
-              mode={mode}
-              onModeChange={handleModeChange}
-              odooStatus={odooStatus}
-              locale={locale}
+                        <SidebarContent
+                          mode={mode}
+                          onModeChange={handleModeChange}
+                          odooStatus={odooStatus}
+                          locale={locale}
                       recentOdooResults={recentOdooResults}
               searchQuery={searchQuery}
               setSearchQuery={setSearchQuery}
@@ -862,19 +947,19 @@ export default function AppPage() {
               manualBarcode={manualBarcode}
               manualSku={manualSku}
               manualError={manualError}
-              setManualName={setManualName}
-              setManualBarcode={setManualBarcode}
-              setManualSku={setManualSku}
-              addManualProduct={addManualProduct}
-              addSampleProduct={addSampleProduct}
-              products={products}
-              activeProductId={activeProductId}
+                          setManualName={setManualName}
+                          setManualBarcode={setManualBarcode}
+                          setManualSku={setManualSku}
+                          addManualProduct={addManualProduct}
+                          addSampleProduct={addSampleProduct}
+                          productById={productById}
+                          activeProductId={activeProductId}
               setActiveProductId={setActiveProductId}
               fillNextAvailable={fillNextAvailable}
               fillNextAvailableCount={fillNextAvailableCount}
               fillAllPages={fillAllPages}
               removeProduct={removeProduct}
-              selectedCellIds={selectedCellIds}
+              selectedCellCount={selectedCellCount}
               popoverOpen={popoverOpen}
               setPopoverOpen={setPopoverOpen}
               assignToSelected={assignToSelected}
@@ -1044,11 +1129,11 @@ export default function AppPage() {
               <span>{t("printHint")}</span>
             </div>
           ) : null}
-          {selectedCellIds.length > 0 ? (
+          {selectedCellCount > 0 ? (
             <div className="hidden flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs sm:flex">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-semibold text-slate-700">
-                  {t("selectionCount", { count: selectedCellIds.length })}
+                  {t("selectionCount", { count: selectedCellCount })}
                 </span>
                 {activeProduct ? (
                   <Badge variant="secondary" title={activeProduct.name}>
@@ -1069,7 +1154,7 @@ export default function AppPage() {
           ) : null}
           <div className="space-y-6">
             {previewPages.map((page) => {
-              const pageIndex = Math.max(0, pages.findIndex((item) => item.id === page.id));
+              const pageIndex = pageIndexById.get(page.id) ?? 0;
               return (
               <div key={page.id} className="overflow-auto border border-slate-200 bg-white p-4 sm:p-6">
                 <div
@@ -1110,32 +1195,30 @@ export default function AppPage() {
                     }}
                   >
                     {page.cells.map((cell, cellIndex) => {
-                      const product = products.find((item) => item.id === cell.productId) ?? null;
-                      const isSelected = selectedCellIds.includes(cell.id);
+                      const product = productById.get(cell.productId ?? "") ?? null;
+                      const isSelected = selectedCellSet.has(cell.id);
                       return (
                         <LabelCell
                           key={cell.id}
-                          cellId={cell.id}
                           labelIndex={cellIndex + 1}
                           product={product}
                           isSelected={isSelected}
                           activeProductId={activeProductId}
-                          selectedCount={selectedCellIds.length}
+                          selectedCount={selectedCellCount}
                           onMouseDown={(event) =>
                             handleCellMouseDown(event, pageIndex, cellIndex, cell.id)
                           }
-                          onMouseEnter={() => handleCellMouseEnter(pageIndex, cellIndex, cell.id)}
+                          onMouseEnter={() => handleCellMouseEnter(pageIndex, cellIndex)}
                           onPointerDown={(event) =>
                             handleCellPointerDown(event, pageIndex, cellIndex, cell.id, isSelected)
                           }
                           onPointerEnter={() =>
                             isMobile && dragSelectState?.active
-                              ? handleCellMouseEnter(pageIndex, cellIndex, cell.id)
+                              ? handleCellMouseEnter(pageIndex, cellIndex)
                               : null
                           }
                           onPointerUp={() => handleCellPointerUp(cell.id)}
                           onClear={() => clearCell(cell.id)}
-                          onClearSelected={() => clearSelected()}
                           onAssignSelected={() =>
                             activeProductId && assignToSelected(activeProductId)
                           }
@@ -1192,7 +1275,7 @@ export default function AppPage() {
             size="sm"
             className="hidden flex-1 sm:inline-flex"
             onClick={() => activeProductId && assignToSelected(activeProductId)}
-            disabled={!activeProductId || selectedCellIds.length === 0}
+            disabled={!activeProductId || selectedCellCount === 0}
           >
             {t("assignActiveProduct")}
           </Button>
@@ -1205,7 +1288,7 @@ export default function AppPage() {
         layout={layout}
         grid={grid}
         pages={pages}
-        products={products}
+        productById={productById}
         barcodeHeightPx={barcodeHeightPx}
         paddingCm={cellPaddingCm}
       />
@@ -1213,7 +1296,7 @@ export default function AppPage() {
         <div className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-200 pt-4 text-xs text-muted-foreground">
           <div className="flex flex-wrap items-center gap-2">
             <span>{t("selectedLabels")}</span>
-            <Badge variant="brand">{selectedCellIds.length}</Badge>
+            <Badge variant="brand">{selectedCellCount}</Badge>
             <span>{t("activeProduct")}</span>
             <span className="font-semibold text-slate-800">
               {activeProduct ? activeProduct.name : t("none")}
@@ -1237,7 +1320,7 @@ export default function AppPage() {
   );
 }
 
-function ProductCard({
+const ProductCard = memo(function ProductCard({
   product,
   active,
   assignedCount,
@@ -1353,7 +1436,7 @@ function ProductCard({
       </div>
     </div>
   );
-}
+});
 
 type SidebarContentProps = {
   mode: "odoo" | "manual";
@@ -1378,7 +1461,7 @@ type SidebarContentProps = {
   setManualSku: (value: string) => void;
   addManualProduct: () => void;
   addSampleProduct: () => void;
-  products: Product[];
+  productById: Map<string, Product>;
   assignedCounts: Map<string, number>;
   activeProductId: string | null;
   setActiveProductId: (value: string | null) => void;
@@ -1386,14 +1469,14 @@ type SidebarContentProps = {
   fillNextAvailableCount: (productId: string, count: number) => void;
   fillAllPages: (productId: string) => void;
   removeProduct: (productId: string) => void;
-  selectedCellIds: string[];
+  selectedCellCount: number;
   popoverOpen: boolean;
   setPopoverOpen: (value: boolean) => void;
   assignToSelected: (productId: string) => void;
   isMobile: boolean;
 };
 
-function SidebarContent({
+const SidebarContent = memo(function SidebarContent({
   mode,
   onModeChange,
   odooStatus,
@@ -1416,7 +1499,7 @@ function SidebarContent({
   setManualSku,
   addManualProduct,
   addSampleProduct,
-  products,
+  productById,
   assignedCounts,
   activeProductId,
   setActiveProductId,
@@ -1424,13 +1507,14 @@ function SidebarContent({
   fillNextAvailableCount,
   fillAllPages,
   removeProduct,
-  selectedCellIds,
+  selectedCellCount,
   popoverOpen,
   setPopoverOpen,
   assignToSelected,
   isMobile,
 }: SidebarContentProps) {
   const t = useTranslations("App");
+  const products = useMemo(() => Array.from(productById.values()), [productById]);
 
   return (
     <>
@@ -1649,13 +1733,13 @@ function SidebarContent({
           </div>
         </div>
       ) : null}
-      {!isMobile && selectedCellIds.length > 0 && products.length > 0 ? (
+      {!isMobile && selectedCellCount > 0 && products.length > 0 ? (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-500">
               {t("assignToSelected")}
             </h3>
-            <Badge variant="brand">{selectedCellIds.length}</Badge>
+                <Badge variant="brand">{selectedCellCount}</Badge>
           </div>
           <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
             <PopoverTrigger asChild>
@@ -1666,7 +1750,7 @@ function SidebarContent({
             <PopoverContent className="w-64 p-2" align="start">
               <div className="space-y-1">
                 <p className="text-xs font-semibold text-slate-700 mb-2">
-                  {t("assignToCount", { count: selectedCellIds.length })}
+                  {t("assignToCount", { count: selectedCellCount })}
                 </p>
                 <ScrollArea className="h-48">
                   <div className="space-y-1">
@@ -1700,7 +1784,7 @@ function SidebarContent({
       ) : null}
     </>
   );
-}
+});
 
 type LayoutPanelProps = {
   layout: LayoutSettings;
@@ -1711,7 +1795,7 @@ type LayoutPanelProps = {
   setSelectedPresetId: (value: string | null) => void;
 };
 
-function LayoutPanel({
+const LayoutPanel = memo(function LayoutPanel({
   layout,
   setLayout,
   pagesToRender,
@@ -1950,10 +2034,9 @@ function LayoutPanel({
       </div>
     </div>
   );
-}
+});
 
-function LabelCell({
-  cellId,
+const LabelCell = memo(function LabelCell({
   labelIndex,
   product,
   isSelected,
@@ -1965,26 +2048,23 @@ function LabelCell({
   onPointerEnter,
   onPointerUp,
   onClear,
-  onClearSelected,
   onAssignSelected,
   onDuplicate,
   barcodeHeightPx,
   fontSizePt,
   paddingCm,
 }: {
-  cellId: string;
   labelIndex: number;
   product: Product | null;
   isSelected: boolean;
   activeProductId: string | null;
   selectedCount: number;
-  onMouseDown: (event: React.MouseEvent) => void;
+  onMouseDown: (event: MouseEvent) => void;
   onMouseEnter: () => void;
-  onPointerDown: (event: React.PointerEvent) => void;
+  onPointerDown: (event: PointerEvent) => void;
   onPointerEnter: () => void;
   onPointerUp: () => void;
   onClear: () => void;
-  onClearSelected: () => void;
   onAssignSelected: () => void;
   onDuplicate: () => void;
   barcodeHeightPx: number;
@@ -2057,20 +2137,20 @@ function LabelCell({
       </ContextMenuContent>
     </ContextMenu>
   );
-}
+});
 
-function PrintArea({
+const PrintArea = memo(function PrintArea({
   layout,
   grid,
   pages,
-  products,
+  productById,
   barcodeHeightPx,
   paddingCm,
 }: {
   layout: LayoutSettings;
   grid: ReturnType<typeof computeGrid>;
   pages: Page[];
-  products: Product[];
+  productById: Map<string, Product>;
   barcodeHeightPx: number;
   paddingCm: number;
 }) {
@@ -2098,7 +2178,7 @@ function PrintArea({
             }}
           >
             {page.cells.map((cell) => {
-              const product = products.find((item) => item.id === cell.productId) ?? null;
+              const product = productById.get(cell.productId ?? "") ?? null;
               return (
                 <div
                   key={cell.id}
@@ -2124,4 +2204,4 @@ function PrintArea({
       ))}
     </div>
   );
-}
+});

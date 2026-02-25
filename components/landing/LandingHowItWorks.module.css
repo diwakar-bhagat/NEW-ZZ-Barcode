@@ -42,10 +42,56 @@
   gap: 2.25rem;
 }
 
+.faqSection {
+  margin-top: 3.5rem;
+  border-top: 1px solid var(--landing-border);
+  padding-top: 2.5rem;
+  display: grid;
+  gap: 1.25rem;
+}
+
+.faqTitle {
+  margin: 0;
+  font-size: var(--landing-text-2xl);
+  line-height: 1.25;
+  color: var(--landing-text);
+}
+
+.faqList {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.faqItem {
+  border: 1px solid var(--landing-border);
+  border-radius: 0.9rem;
+  background: #ffffff;
+  padding: 0.85rem 1rem;
+  color: var(--landing-text-muted);
+}
+
+.faqQuestion {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--landing-text);
+}
+
+.faqAnswer {
+  margin: 0.55rem 0 0;
+  font-size: var(--landing-text-sm);
+  line-height: var(--landing-line-relaxed);
+  color: var(--landing-text-muted);
+}
+
 @media (min-width: 768px) {
   .stepsOnly {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 2.5rem 2rem;
+  }
+
+  .faqSection {
+    margin-top: 4rem;
+    padding-top: 3rem;
   }
 }
 

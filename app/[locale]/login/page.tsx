@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import Image from "next/image";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { Github } from "lucide-react";
@@ -11,22 +12,24 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { trackPageView } from "@/lib/analytics";
 
 export default function LoginPage() {
   const router = useRouter();
   const locale = useLocale();
   const t = useTranslations("Login");
   const tCommon = useTranslations("Common");
-  const logoSrc =
-    process.env.NODE_ENV === "development"
-      ? `/brand/labbely-logo.png?ts=${Date.now()}`
-      : "/brand/labbely-logo.png";
+  const logoSrc = "/brand/labbely-logo.png";
   const [odooUrl, setOdooUrl] = useState("");
   const [db, setDb] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    trackPageView(locale, `/${locale}/login`, "view_login");
+  }, [locale]);
 
   const handleSubmit = async () => {
     setStatus("loading");
@@ -74,16 +77,16 @@ export default function LoginPage() {
         <LanguageSwitcher />
       </div>
       <Card className="w-full max-w-md">
-        <CardHeader className="space-y-3">
+            <CardHeader className="space-y-3">
           <div className="flex items-center">
-            <img
+            <Image
               src={logoSrc}
               alt="Labbely"
               width={220}
               height={56}
               className="h-8 w-auto"
-              loading="eager"
-              decoding="async"
+              priority
+              sizes="220px"
             />
           </div>
           <CardTitle>{t("title")}</CardTitle>

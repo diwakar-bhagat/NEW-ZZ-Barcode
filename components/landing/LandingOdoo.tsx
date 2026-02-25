@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { ArrowRight, Check, ExternalLink } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { TrackedLink } from "@/components/analytics/TrackedLink";
 import { LandingContainer } from "./LandingContainer";
 import { LandingSection } from "./LandingSection";
 import { LandingKicker } from "./LandingKicker";
@@ -59,9 +59,13 @@ export function LandingOdoo({
               ))}
             </ul>
             <Button asChild className={styles.cta}>
-              <Link href={loginHref}>
+              <TrackedLink
+                href={loginHref}
+                locale="en"
+                tracking={{ kind: "connect_odoo", source: "odoo" }}
+              >
                 {ctaLabel} <ArrowRight className="ml-2 h-4 w-4" />
-              </Link>
+              </TrackedLink>
             </Button>
           </div>
           <div className={styles.codeWrap}>

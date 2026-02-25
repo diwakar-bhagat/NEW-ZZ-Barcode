@@ -1,10 +1,11 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { useLocale, useTranslations } from "next-intl";
 import { Loader2 } from "lucide-react";
+import Image from "next/image";
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { locales, type Locale } from "@/lib/i18n";
@@ -15,29 +16,19 @@ export default function LanguageSwitcher() {
   const searchParams = useSearchParams();
   const locale = useLocale();
   const t = useTranslations("Common");
-  const [isSwitching, setIsSwitching] = useState(false);
-  const [isMounted, setIsMounted] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
-    setIsMounted(true);
-  }, []);
-
-  useEffect(() => {
-    if (!isMounted) {
-      return;
-    }
-    setIsSwitching(false);
-    if (typeof document !== "undefined") {
+    if (!isPending && typeof document !== "undefined") {
       document.body.classList.remove("locale-switching");
     }
-  }, [isMounted, locale]);
+  }, [isPending]);
 
   const handleLocaleChange = (nextLocale: Locale) => {
     if (nextLocale === locale) {
       return;
     }
-    setIsSwitching(true);
+
     if (typeof document !== "undefined") {
       document.body.classList.add("locale-switching");
     }
@@ -63,7 +54,7 @@ export default function LanguageSwitcher() {
     });
   };
 
-  const isActive = isSwitching || isPending;
+  const isActive = isPending;
 
   return (
     <Select value={locale} onValueChange={handleLocaleChange} disabled={isActive}>
@@ -80,18 +71,18 @@ export default function LanguageSwitcher() {
           </SelectItem>
         ))}
       </SelectContent>
-      {isMounted && isActive
+      {isActive && typeof document !== "undefined"
         ? createPortal(
             <div className="locale-transition fixed inset-0 z-[1000] bg-white/95">
               <div className="flex min-h-svh flex-col items-center justify-center gap-6 px-6 text-center">
-                <img
+                <Image
                   src="/brand/labbely-icon.png"
                   alt="Labbely"
                   width={56}
                   height={56}
                   className="h-14 w-14"
-                  loading="eager"
-                  decoding="async"
+                  sizes="56px"
+                  priority
                 />
                 <div className="space-y-2">
                   <div className="mx-auto h-4 w-56 rounded-full bg-slate-200/90 animate-pulse" />

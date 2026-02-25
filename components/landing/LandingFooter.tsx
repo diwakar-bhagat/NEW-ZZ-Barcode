@@ -1,8 +1,8 @@
-"use client";
-
+import Image from "next/image";
 import Link from "next/link";
 
 import LanguageSwitcher from "@/components/LanguageSwitcher";
+import { TrackedLink } from "@/components/analytics/TrackedLink";
 import { LandingContainer } from "./LandingContainer";
 
 import styles from "./LandingFooter.module.css";
@@ -16,6 +16,8 @@ export function LandingFooter({
   productLabel,
   editorLabel,
   loginLabel,
+  resourcesLabel,
+  blogLabel,
   developersLabel,
   githubLabel,
   issuesLabel,
@@ -25,9 +27,12 @@ export function LandingFooter({
   loginHref,
   githubHref,
   issuesHref,
+  resourcesHref,
+  blogHref,
   className = "",
   style,
 }: LandingFooterProps) {
+  const localeCode = _locale === "en" ? "en" : "es";
   const localePrefix = _locale ? `/${_locale}` : "/";
 
   return (
@@ -36,7 +41,15 @@ export function LandingFooter({
         <div className={styles.grid}>
           <div className={styles.brand}>
             <Link href={localePrefix} className={styles.logoLink} aria-label={homeAriaLabel}>
-              <img src={logoSrc} alt="Labbely" className={styles.logo} loading="lazy" />
+              <Image
+                src={logoSrc}
+                alt="Labbely"
+                width={148}
+                height={32}
+                className={styles.logo}
+                loading="lazy"
+                sizes="148px"
+              />
             </Link>
             <p className={styles.tagline}>{tagline}</p>
           </div>
@@ -45,14 +58,34 @@ export function LandingFooter({
             <h3 className={styles.columnTitle}>{productLabel}</h3>
             <ul className={styles.linkList}>
               <li>
-                <Link href={appHref} className={styles.link}>
+                <TrackedLink
+                  href={appHref}
+                  locale={localeCode}
+                  tracking={{ kind: "open_app", source: "footer" }}
+                  className={styles.link}
+                >
                   {editorLabel}
+                </TrackedLink>
+              </li>
+              <li>
+                <Link href={resourcesHref} className={styles.link}>
+                  {resourcesLabel}
                 </Link>
               </li>
               <li>
-                <Link href={loginHref} className={styles.link}>
-                  {loginLabel}
+                <Link href={blogHref} className={styles.link}>
+                  {blogLabel}
                 </Link>
+              </li>
+              <li>
+                <TrackedLink
+                  href={loginHref}
+                  locale={localeCode}
+                  tracking={{ kind: "connect_odoo", source: "footer" }}
+                  className={styles.link}
+                >
+                  {loginLabel}
+                </TrackedLink>
               </li>
             </ul>
           </div>

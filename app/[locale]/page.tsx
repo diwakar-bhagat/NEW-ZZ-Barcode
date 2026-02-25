@@ -3,6 +3,7 @@ import { getTranslations } from "next-intl/server";
 
 import { defaultLocale, isLocale } from "@/lib/i18n";
 import { getAlternateLanguages, getBaseUrl, getCanonicalUrl } from "@/lib/seo";
+import { getLocalizedResourceSummaries } from "@/lib/seoContent";
 import {
   LandingNav,
   LandingHero,
@@ -11,8 +12,10 @@ import {
   LandingOdoo,
   LandingUseCases,
   LandingOpenSource,
+  LandingResources,
   LandingFooter,
 } from "@/components/landing";
+import { HomePageTracker } from "@/components/analytics/HomePageTracker";
 
 type HomePageProps = {
   params: Promise<{ locale: string }>;
@@ -24,14 +27,39 @@ export async function generateMetadata({
   const resolvedParams = await params;
   const locale = isLocale(resolvedParams.locale) ? resolvedParams.locale : defaultLocale;
   const canonicalUrl = getCanonicalUrl(locale);
+  const tMetadata = await getTranslations({ locale, namespace: "Metadata" });
+  const title = tMetadata("title");
+  const description = tMetadata("description");
+  const keywords = tMetadata("keywords");
+  const ogImage = tMetadata("ogImage") || "/brand/mockup-hero.png";
 
   return {
+    title,
+    description,
+    keywords: keywords.split(",").map((keyword) => keyword.trim()),
     alternates: {
       canonical: canonicalUrl,
       languages: getAlternateLanguages(),
     },
     openGraph: {
+      title,
+      description,
       url: canonicalUrl,
+      type: "website",
+      images: [
+        {
+          url: ogImage,
+          width: 1200,
+          height: 630,
+          alt: tMetadata("ogImageAlt"),
+        },
+      ],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: [ogImage],
     },
   };
 }
@@ -42,16 +70,19 @@ export default async function Home({ params }: HomePageProps) {
   const t = await getTranslations({ locale, namespace: "Home" });
   const tCommon = await getTranslations({ locale, namespace: "Common" });
   const tMetadata = await getTranslations({ locale, namespace: "Metadata" });
-  const logoSrc =
-    process.env.NODE_ENV === "development"
-      ? `/brand/labbely-logo.png?ts=${Date.now()}`
-      : "/brand/labbely-logo.png";
+  const logoSrc = "/brand/labbely-logo.png";
   const baseUrl = getBaseUrl();
   const canonicalUrl = getCanonicalUrl(locale);
   const organizationId = `${baseUrl}/#organization`;
   const websiteId = `${baseUrl}/#website`;
   const webPageId = `${canonicalUrl}#webpage`;
   const softwareId = `${baseUrl}/#software`;
+  const resources = getLocalizedResourceSummaries(locale).map((resource) => ({
+    slug: resource.slug[locale],
+    title: resource.title[locale],
+    summary: resource.summary[locale],
+  }));
+
   const jsonLd = {
     "@context": "https://schema.org",
     "@graph": [
@@ -96,6 +127,36 @@ export default async function Home({ params }: HomePageProps) {
           availability: "https://schema.org/InStock",
         },
       },
+      {
+        "@type": "FAQPage",
+        "@id": `${canonicalUrl}#howitworks-faq`,
+        mainEntity: [
+          {
+            "@type": "Question",
+            name: t("howItWorksFaqQuestion1"),
+            acceptedAnswer: {
+              "@type": "Answer",
+              text: t("howItWorksFaqAnswer1"),
+            },
+          },
+          {
+            "@type": "Question",
+            name: t("howItWorksFaqQuestion2"),
+            acceptedAnswer: {
+              "@type": "Answer",
+              text: t("howItWorksFaqAnswer2"),
+            },
+          },
+          {
+            "@type": "Question",
+            name: t("howItWorksFaqQuestion3"),
+            acceptedAnswer: {
+              "@type": "Answer",
+              text: t("howItWorksFaqAnswer3"),
+            },
+          },
+        ],
+      },
     ],
   };
 
@@ -106,6 +167,7 @@ export default async function Home({ params }: HomePageProps) {
 
   return (
     <div className="min-h-screen bg-white">
+      <HomePageTracker locale={locale} path={`/${locale}/`} />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
@@ -147,6 +209,8 @@ export default async function Home({ params }: HomePageProps) {
             imageSrc:
               "https://images.unsplash.com/photo-1612815154858-60aa4c59eaa6?w=400&h=300&fit=crop",
             imageAlt: t("feature1ImageAlt"),
+            imageWidth: 400,
+            imageHeight: 300,
             iconClassName: "bg-slate-100 text-slate-900 border-slate-200",
             iconKey: "printer",
           },
@@ -156,6 +220,8 @@ export default async function Home({ params }: HomePageProps) {
             imageSrc:
               "https://images.unsplash.com/photo-1563986768609-322da13575f3?w=400&h=300&fit=crop",
             imageAlt: t("feature2ImageAlt"),
+            imageWidth: 400,
+            imageHeight: 300,
             iconClassName: "bg-slate-100 text-slate-900 border-slate-200",
             iconKey: "search",
           },
@@ -165,6 +231,8 @@ export default async function Home({ params }: HomePageProps) {
             imageSrc:
               "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=400&h=300&fit=crop",
             imageAlt: t("feature3ImageAlt"),
+            imageWidth: 400,
+            imageHeight: 300,
             iconClassName: "bg-slate-100 text-slate-900 border-slate-200",
             iconKey: "zap",
           },
@@ -175,6 +243,12 @@ export default async function Home({ params }: HomePageProps) {
         processLabel={t("processLabel")}
         title={t("howItWorksTitle")}
         subtitle={t("howItWorksSubtitle")}
+        faqTitle={t("howItWorksFaqTitle")}
+        faqItems={[
+          { question: t("howItWorksFaqQuestion1"), answer: t("howItWorksFaqAnswer1") },
+          { question: t("howItWorksFaqQuestion2"), answer: t("howItWorksFaqAnswer2") },
+          { question: t("howItWorksFaqQuestion3"), answer: t("howItWorksFaqAnswer3") },
+        ]}
         steps={[
           {
             number: 1,
@@ -217,6 +291,23 @@ export default async function Home({ params }: HomePageProps) {
         loginHref={loginHref}
       />
 
+      <LandingResources
+        locale={locale}
+        title={t("resourcesTitle")}
+        subtitle={t("resourcesSubtitle")}
+        description={t("resourcesDescription")}
+        resources={resources}
+        appLabel={t("resourcesOpenAppCta")}
+        appHref={appHref}
+        connectLabel={t("resourcesConnectOdooCta")}
+        connectHref={loginHref}
+        moreLabel={t("resourcesRead")}
+        moreHref={`/${locale}/recursos`}
+        resourcesIndexLabel={t("resourcesListLabel")}
+        blogReadLabel={t("homeBlogReadMore")}
+        blogHref={`/${locale}/blog`}
+      />
+
       <LandingUseCases
         title={t("useCasesTitle")}
         subtitle={t("useCasesSubtitle")}
@@ -227,6 +318,8 @@ export default async function Home({ params }: HomePageProps) {
             imageSrc:
               "https://images.unsplash.com/photo-1553413077-190dd305871c?w=600&h=400&fit=crop",
             imageAlt: t("useCase1ImageAlt"),
+            imageWidth: 600,
+            imageHeight: 400,
             iconBgClass: "bg-slate-100 text-slate-900 border border-slate-200",
             iconKey: "package",
           },
@@ -236,6 +329,8 @@ export default async function Home({ params }: HomePageProps) {
             imageSrc:
               "https://images.unsplash.com/photo-1556740758-90de374c12ad?w=600&h=400&fit=crop",
             imageAlt: t("useCase2ImageAlt"),
+            imageWidth: 600,
+            imageHeight: 400,
             iconBgClass: "bg-slate-100 text-slate-900 border border-slate-200",
             iconKey: "barChart3",
           },
@@ -261,6 +356,10 @@ export default async function Home({ params }: HomePageProps) {
         tagline={t("footerTagline")}
         productLabel={t("footerProduct")}
         editorLabel={t("footerEditor")}
+        resourcesLabel={t("footerResources")}
+        resourcesHref={`/${locale}/recursos`}
+        blogLabel={t("footerBlog")}
+        blogHref={`/${locale}/blog`}
         loginLabel={t("footerLogin")}
         developersLabel={t("footerDevelopers")}
         githubLabel={tCommon("github")}

@@ -67,6 +67,8 @@ const DEFAULT_LAYOUT: LayoutSettings = {
   offsetYCm: 0,
 };
 
+const HISTORY_LIMIT = 30;
+
 const createCells = (count: number, pageIndex: number, existing?: Cell[]) => {
   return Array.from({ length: count }).map((_, idx) => ({
     id: existing?.[idx]?.id ?? `page-${pageIndex}-cell-${idx}`,
@@ -85,6 +87,16 @@ const clonePages = (pages: Page[]) =>
     cells: page.cells.map((cell) => ({ ...cell })),
   }));
 
+const addHistorySnapshot = (history: Page[][], pages: Page[]) => {
+  const snapshot = clonePages(pages);
+  if (history.length < HISTORY_LIMIT) {
+    return [...history, snapshot];
+  }
+  return [...history.slice(1), snapshot];
+};
+
+const toSet = (values: string[]) => new Set(values);
+
 const findCell = (pages: Page[], cellId: string) => {
   for (const page of pages) {
     const index = page.cells.findIndex((cell) => cell.id === cellId);
@@ -95,7 +107,7 @@ const findCell = (pages: Page[], cellId: string) => {
   return null;
 };
 
-export const useEditorStore = create<EditorState>((set, get) => ({
+export const useEditorStore = create<EditorState>((set) => ({
   layout: DEFAULT_LAYOUT,
   pagesToRender: 1,
   pages: [createPage(0, 0)],
@@ -106,7 +118,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   activeProductId: null,
   lastSelectedCellId: null,
   setLayout: (layout) => set({ layout }),
-  setPagesToRender: (count) => set({ pagesToRender: Math.max(1, count) }),
+  setPagesToRender: (count) => set({ pagesToRender: Math.min(120, Math.max(1, count)) }),
   syncPages: (labelsPerPage, pagesToRender) => {
     set((state) => {
       const count = Math.max(1, pagesToRender ?? state.pagesToRender);
@@ -138,15 +150,23 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   clearSelection: () => set({ selectedCellIds: [], lastSelectedCellId: null }),
   assignToSelected: (productId) =>
     set((state) => {
+      if (state.selectedCellIds.length === 0) {
+        return state;
+      }
+      const selectedSet = toSet(state.selectedCellIds);
       const updatedPages = state.pages.map((page) => ({
         ...page,
         cells: page.cells.map((cell) =>
-          state.selectedCellIds.includes(cell.id)
+          selectedSet.has(cell.id)
             ? { ...cell, productId }
             : cell,
         ),
       }));
-      return { pages: updatedPages, history: [...state.history, clonePages(state.pages)], future: [] };
+      return {
+        pages: updatedPages,
+        history: addHistorySnapshot(state.history, state.pages),
+        future: [],
+      };
     }),
   fillNextAvailable: (productId) =>
     set((state) => {
@@ -157,7 +177,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           page.cells = page.cells.map((cell, idx) =>
             idx === cellIndex ? { ...cell, productId } : cell,
           );
-          return { pages: updatedPages, history: [...state.history, clonePages(state.pages)], future: [] };
+          return {
+            pages: updatedPages,
+            history: addHistorySnapshot(state.history, state.pages),
+            future: [],
+          };
         }
       }
       return state;
@@ -182,7 +206,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           break;
         }
       }
-      return { pages: updatedPages, history: [...state.history, clonePages(state.pages)], future: [] };
+      return {
+        pages: updatedPages,
+        history: addHistorySnapshot(state.history, state.pages),
+        future: [],
+      };
     }),
   fillAllPages: (productId) =>
     set((state) => {
@@ -190,7 +218,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         ...page,
         cells: page.cells.map((cell) => ({ ...cell, productId })),
       }));
-      return { pages: updatedPages, history: [...state.history, clonePages(state.pages)], future: [] };
+      return {
+        pages: updatedPages,
+        history: addHistorySnapshot(state.history, state.pages),
+        future: [],
+      };
     }),
   clearAll: () =>
     set((state) => {
@@ -198,22 +230,31 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         ...page,
         cells: page.cells.map((cell) => ({ ...cell, productId: null })),
       }));
-      return { pages: updatedPages, history: [...state.history, clonePages(state.pages)], future: [] };
+      return {
+        pages: updatedPages,
+        history: addHistorySnapshot(state.history, state.pages),
+        future: [],
+      };
     }),
   clearSelected: () =>
     set((state) => {
       if (state.selectedCellIds.length === 0) {
         return state;
       }
+      const selectedSet = toSet(state.selectedCellIds);
       const updatedPages = state.pages.map((page) => ({
         ...page,
         cells: page.cells.map((cell) =>
-          state.selectedCellIds.includes(cell.id)
+          selectedSet.has(cell.id)
             ? { ...cell, productId: null }
             : cell,
         ),
       }));
-      return { pages: updatedPages, history: [...state.history, clonePages(state.pages)], future: [] };
+      return {
+        pages: updatedPages,
+        history: addHistorySnapshot(state.history, state.pages),
+        future: [],
+      };
     }),
   removeProduct: (productId) =>
     set((state) => {
@@ -228,7 +269,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         products: nextProducts,
         pages: updatedPages,
         activeProductId: state.activeProductId === productId ? null : state.activeProductId,
-        history: [...state.history, clonePages(state.pages)],
+        history: addHistorySnapshot(state.history, state.pages),
         future: [],
       };
     }),
@@ -248,7 +289,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         );
         return { ...existing, cells };
       });
-      return { pages: updatedPages, history: [...state.history, clonePages(state.pages)], future: [] };
+      return {
+        pages: updatedPages,
+        history: addHistorySnapshot(state.history, state.pages),
+        future: [],
+      };
     }),
   swapCells: (fromCellId, toCellId) =>
     set((state) => {
@@ -274,7 +319,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         });
         return { ...page, cells };
       });
-      return { pages: updatedPages, history: [...state.history, clonePages(state.pages)], future: [] };
+      return {
+        pages: updatedPages,
+        history: addHistorySnapshot(state.history, state.pages),
+        future: [],
+      };
     }),
   clearCell: (cellId) =>
     set((state) => {
@@ -284,7 +333,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           cell.id === cellId ? { ...cell, productId: null } : cell,
         ),
       }));
-      return { pages: updatedPages, history: [...state.history, clonePages(state.pages)], future: [] };
+      return {
+        pages: updatedPages,
+        history: addHistorySnapshot(state.history, state.pages),
+        future: [],
+      };
     }),
   undo: () =>
     set((state) => {
@@ -308,7 +361,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       const nextFuture = state.future.slice(1);
       return {
         pages: clonePages(next),
-        history: [...state.history, clonePages(state.pages)],
+        history: addHistorySnapshot(state.history, state.pages),
         future: nextFuture,
       };
     }),

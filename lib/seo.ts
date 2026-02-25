@@ -2,8 +2,22 @@ import { defaultLocale, type Locale } from "./i18n";
 
 const normalizeBaseUrl = (value: string) => value.replace(/\/+$/, "");
 
-export const getBaseUrl = () =>
-  normalizeBaseUrl(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000");
+const resolveBaseUrl = () => {
+  const raw = process.env.NEXT_PUBLIC_SITE_URL;
+  if (raw) {
+    const normalized = raw.trim();
+    if (normalized) {
+      return normalizeBaseUrl(normalized);
+    }
+  }
+  if (process.env.NODE_ENV !== "production") {
+    return "http://localhost:3000";
+  }
+
+  throw new Error("NEXT_PUBLIC_SITE_URL is required in production");
+};
+
+export const getBaseUrl = () => resolveBaseUrl();
 
 const normalizePath = (path: string) => {
   if (!path) {

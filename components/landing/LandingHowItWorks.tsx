@@ -1,5 +1,3 @@
-"use client";
-
 import { cn } from "@/lib/utils";
 import { LandingContainer } from "./LandingContainer";
 import { LandingSection } from "./LandingSection";
@@ -13,6 +11,8 @@ export function LandingHowItWorks({
   title,
   subtitle,
   steps,
+  faqTitle,
+  faqItems,
   className = "",
   style,
 }: LandingHowItWorksProps) {
@@ -38,6 +38,19 @@ export function LandingHowItWorks({
             </div>
           ))}
         </div>
+        {faqItems?.length ? (
+          <section className={styles.faqSection} aria-label={faqTitle ?? "FAQ"}>
+            <h3 className={styles.faqTitle}>{faqTitle ?? "FAQ"}</h3>
+            <div className={styles.faqList}>
+              {faqItems.map((item, index) => (
+                <details key={index} className={styles.faqItem}>
+                  <summary className={styles.faqQuestion}>{item.question}</summary>
+                  <p className={styles.faqAnswer}>{item.answer}</p>
+                </details>
+              ))}
+            </div>
+          </section>
+        ) : null}
       </LandingContainer>
     </LandingSection>
   );
