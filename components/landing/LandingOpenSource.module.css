@@ -2,59 +2,10 @@
 
 @import "./landing.tokens.css";
 
-/* Fondo negro + código de barras (franjas blancas finas) */
 .openSource {
   position: relative;
   overflow: hidden;
-  background-color: #0a0a0a;
-  background-image: repeating-linear-gradient(
-    90deg,
-    transparent 0,
-    transparent 2px,
-    rgba(255, 255, 255, 0.07) 2px,
-    rgba(255, 255, 255, 0.07) 5px,
-    transparent 5px,
-    transparent 14px,
-    rgba(255, 255, 255, 0.06) 14px,
-    rgba(255, 255, 255, 0.06) 18px,
-    transparent 18px,
-    transparent 28px,
-    rgba(255, 255, 255, 0.08) 28px,
-    rgba(255, 255, 255, 0.08) 32px,
-    transparent 32px,
-    transparent 42px
-  );
-  background-size: 100% 100%;
-}
-
-/* Overlay blanco: izquierda → derecha */
-.openSource::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    to right,
-    rgba(255, 255, 255, 0.92) 0%,
-    rgba(255, 255, 255, 0.4) 35%,
-    transparent 65%
-  );
-  pointer-events: none;
-  z-index: 0;
-}
-
-/* Overlay blanco: derecha → izquierda */
-.openSource::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    to left,
-    rgba(255, 255, 255, 0.92) 0%,
-    rgba(255, 255, 255, 0.4) 35%,
-    transparent 65%
-  );
-  pointer-events: none;
-  z-index: 0;
+  background: #0b2a52;
 }
 
 .card {

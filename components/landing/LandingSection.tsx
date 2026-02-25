@@ -7,6 +7,7 @@ import styles from "./LandingSection.module.css";
 type LandingSectionProps = {
   children: React.ReactNode;
   className?: string;
+  style?: React.CSSProperties;
   id?: string;
   spacing?: "default" | "sm" | "lg" | "none";
   linesVariant?: "a" | "b" | "c" | "none";
@@ -15,6 +16,7 @@ type LandingSectionProps = {
 export function LandingSection({
   children,
   className,
+  style,
   id,
   spacing = "default",
   linesVariant = "a",
@@ -22,6 +24,7 @@ export function LandingSection({
   return (
     <section
       id={id}
+      style={style}
       className={cn(
         styles.section,
         linesVariant === "a" && styles.linesA,

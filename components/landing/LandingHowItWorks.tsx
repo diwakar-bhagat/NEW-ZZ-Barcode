@@ -4,7 +4,6 @@ import { cn } from "@/lib/utils";
 import { LandingContainer } from "./LandingContainer";
 import { LandingSection } from "./LandingSection";
 import { LandingKicker } from "./LandingKicker";
-import { LandingCard } from "./LandingCard";
 
 import styles from "./LandingHowItWorks.module.css";
 import type { LandingHowItWorksProps } from "./types";

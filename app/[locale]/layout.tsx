@@ -38,9 +38,9 @@ export async function generateMetadata({
     robots: {
       index: true,
       follow: true,
-      maxSnippet: -1,
-      maxImagePreview: "large",
-      maxVideoPreview: -1,
+      "max-snippet": -1,
+      "max-image-preview": "large",
+      "max-video-preview": -1,
     },
     openGraph: {
       title: t("title"),
