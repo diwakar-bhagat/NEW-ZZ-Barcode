@@ -7,6 +7,7 @@ export type Product = {
   name: string;
   barcode: string;
   sku?: string;
+  price?: number;
   source: "manual" | "odoo";
 };
 
@@ -34,6 +35,7 @@ type EditorState = {
   setPagesToRender: (count: number) => void;
   syncPages: (labelsPerPage: number, pagesToRender?: number) => void;
   addProduct: (product: Product) => void;
+  updateProduct: (productId: string, patch: Partial<Omit<Product, "id" | "source">>) => void;
   setActiveProductId: (productId: string | null) => void;
   setSelectedCellIds: (cellIds: string[]) => void;
   toggleCellSelection: (cellId: string, range?: string[]) => void;
@@ -65,6 +67,8 @@ const DEFAULT_LAYOUT: LayoutSettings = {
   cellPaddingCm: 0.2,
   offsetXCm: 0,
   offsetYCm: 0,
+  labelTemplate: "default",
+  brandText: "ZenZebra",
 };
 
 const HISTORY_LIMIT = 30;
@@ -132,6 +136,12 @@ export const useEditorStore = create<EditorState>((set) => ({
     set((state) => ({
       products: [product, ...state.products],
       activeProductId: product.id,
+    })),
+  updateProduct: (productId, patch) =>
+    set((state) => ({
+      products: state.products.map((product) =>
+        product.id === productId ? { ...product, ...patch } : product,
+      ),
     })),
   setActiveProductId: (productId) => set({ activeProductId: productId }),
   setSelectedCellIds: (cellIds) =>

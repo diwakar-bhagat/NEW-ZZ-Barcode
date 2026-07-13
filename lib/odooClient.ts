@@ -20,6 +20,7 @@ export type SearchProduct = {
   display_name?: string;
   barcode?: string;
   default_code?: string;
+  list_price?: number;
 };
 
 const jsonRpcCall = async <T>(odooUrl: string, params: Record<string, unknown>) => {
@@ -79,7 +80,7 @@ export const searchProducts = async (
         ],
       ],
       {
-        fields: ["id", "name", "barcode", "default_code"],
+        fields: ["id", "name", "barcode", "default_code", "list_price"],
         limit,
       },
     ],

@@ -21,6 +21,10 @@ import { toast } from "sonner";
 import BarcodeSvg from "@/components/BarcodeSvg";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import PrintPageStyle from "@/components/PrintPageStyle";
+import PrinterSelector from "@/components/PrinterSelector";
+import { getSavedPrinter } from "@/hooks/useQZ";
+import { printRaw, QzError } from "@/services/qz";
+import { generateTsplBatch, type TsplLabel } from "@/lib/tspl";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -69,6 +73,7 @@ type SearchResult = {
   display_name?: string;
   barcode?: string;
   default_code?: string;
+  list_price?: number;
 };
 
 const PRESET_LAYOUTS: { id: string; labelKey: string; values: Partial<LayoutSettings> }[] = [
@@ -88,6 +93,7 @@ const PRESET_LAYOUTS: { id: string; labelKey: string; values: Partial<LayoutSett
       offsetYCm: 0,
       barcodeHeightMm: 12,
       fontSizePt: 7,
+      labelTemplate: "default",
     },
   },
   {
@@ -103,6 +109,7 @@ const PRESET_LAYOUTS: { id: string; labelKey: string; values: Partial<LayoutSett
       gapYCm: 0,
       barcodeHeightMm: 12,
       fontSizePt: 7,
+      labelTemplate: "default",
     },
   },
   {
@@ -118,6 +125,7 @@ const PRESET_LAYOUTS: { id: string; labelKey: string; values: Partial<LayoutSett
       gapYCm: 0,
       barcodeHeightMm: 12,
       fontSizePt: 7,
+      labelTemplate: "default",
     },
   },
   {
@@ -137,6 +145,8 @@ const PRESET_LAYOUTS: { id: string; labelKey: string; values: Partial<LayoutSett
       offsetYCm: 0,
       barcodeHeightMm: 6,
       fontSizePt: 5,
+      labelTemplate: "jewellery-split",
+      brandText: "ZenZebra",
     },
   },
 ];
@@ -179,6 +189,7 @@ export default function AppPage() {
   const clearSelected = useEditorStore((state) => state.clearSelected);
   const clearAll = useEditorStore((state) => state.clearAll);
   const removeProduct = useEditorStore((state) => state.removeProduct);
+  const updateProduct = useEditorStore((state) => state.updateProduct);
   const assignToSelected = useEditorStore((state) => state.assignToSelected);
   const fillNextAvailable = useEditorStore((state) => state.fillNextAvailable);
   const fillNextAvailableCount = useEditorStore((state) => state.fillNextAvailableCount);
@@ -592,6 +603,7 @@ export default function AppPage() {
         name: displayName,
         barcode: result.barcode ?? "",
         sku: result.default_code ?? undefined,
+        price: typeof result.list_price === "number" ? result.list_price : undefined,
         source: "odoo",
       };
       if (isDuplicateProduct(newProduct)) {
@@ -636,6 +648,52 @@ export default function AppPage() {
     trackStartPrint(locale, pagesToRender);
     window.print();
   }, [grid.labelsPerPage, locale, pagesToRender, t]);
+
+  const [qzPrinting, setQzPrinting] = useState(false);
+
+  const handleQzPrint = useCallback(async () => {
+    const printer = getSavedPrinter();
+    if (!printer) {
+      toast.error(t("qzNoPrinter"));
+      return;
+    }
+    // Collect filled cells in page/cell order → one TSPL label each.
+    const labels: TsplLabel[] = [];
+    for (const page of pages) {
+      for (const cell of page.cells) {
+        const product = cell.productId ? productById.get(cell.productId) : null;
+        if (product) {
+          labels.push({
+            barcode: product.barcode,
+            name: product.name,
+            sku: product.sku,
+            price: product.price,
+            brand: layout.brandText,
+          });
+        }
+      }
+    }
+    if (labels.length === 0) {
+      toast.error(t("qzNoLabels"));
+      return;
+    }
+    setQzPrinting(true);
+    const toastId = toast.loading(t("qzPrinting"));
+    try {
+      const tspl = generateTsplBatch(labels, {
+        widthMm: layout.paperWidthCm * 10,
+        heightMm: layout.paperHeightCm * 10,
+      });
+      await printRaw(printer, tspl);
+      toast.success(t("qzPrintDone", { count: labels.length }), { id: toastId });
+    } catch (error) {
+      const message =
+        error instanceof QzError || error instanceof Error ? error.message : String(error);
+      toast.error(t("qzPrintFailed", { message }), { id: toastId });
+    } finally {
+      setQzPrinting(false);
+    }
+  }, [layout.brandText, layout.paperWidthCm, layout.paperHeightCm, pages, productById, t]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -888,6 +946,7 @@ export default function AppPage() {
                           fillNextAvailableCount={fillNextAvailableCount}
                           fillAllPages={fillAllPages}
                           removeProduct={removeProduct}
+                          updateProduct={updateProduct}
                           selectedCellCount={selectedCellCount}
                           popoverOpen={popoverOpen}
                           setPopoverOpen={setPopoverOpen}
@@ -954,6 +1013,17 @@ export default function AppPage() {
               </Button>
             </div>
             <span className="mx-1 hidden h-5 w-px bg-slate-200 sm:inline-flex" />
+            {layout.labelTemplate === "jewellery-split" ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="hidden sm:inline-flex"
+                disabled={qzPrinting}
+                onClick={handleQzPrint}
+              >
+                {qzPrinting ? t("qzPrinting") : t("qzPrintDirect")}
+              </Button>
+            ) : null}
             <Button size="sm" className="hidden sm:inline-flex" onClick={handlePrint}>
               {t("printLabels")}
             </Button>
@@ -993,6 +1063,7 @@ export default function AppPage() {
               fillNextAvailableCount={fillNextAvailableCount}
               fillAllPages={fillAllPages}
               removeProduct={removeProduct}
+              updateProduct={updateProduct}
               selectedCellCount={selectedCellCount}
               popoverOpen={popoverOpen}
               setPopoverOpen={setPopoverOpen}
@@ -1263,6 +1334,8 @@ export default function AppPage() {
                           barcodeMaxHeightPx={barcodeMaxHeightPx}
                           fontSizePt={layout.fontSizePt ?? 7}
                           paddingCm={cellPaddingCm}
+                          labelTemplate={layout.labelTemplate}
+                          brandText={layout.brandText}
                         />
                       );
                     })}
@@ -1314,6 +1387,17 @@ export default function AppPage() {
           >
             {t("assignActiveProduct")}
           </Button>
+          {layout.labelTemplate === "jewellery-split" ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-1"
+              disabled={qzPrinting}
+              onClick={handleQzPrint}
+            >
+              {qzPrinting ? t("qzPrinting") : t("qzPrintDirect")}
+            </Button>
+          ) : null}
           <Button size="sm" className="flex-1" onClick={handlePrint}>
             {t("printLabels")}
           </Button>
@@ -1366,6 +1450,7 @@ const ProductCard = memo(function ProductCard({
   onFillMany,
   onFillAll,
   onRemove,
+  onPriceChange,
 }: {
   product: Product;
   active: boolean;
@@ -1375,6 +1460,7 @@ const ProductCard = memo(function ProductCard({
   onFillMany: (count: number) => void;
   onFillAll: () => void;
   onRemove: () => void;
+  onPriceChange: (price: number | undefined) => void;
 }) {
   const [quantity, setQuantity] = useState(1);
   const t = useTranslations("App");
@@ -1408,6 +1494,28 @@ const ProductCard = memo(function ProductCard({
       <p className="text-slate-500 text-[10px] font-mono">
         {t("barcodeLabel")} {product.barcode || t("notAvailable")}
       </p>
+      <div
+        className="mt-1 flex items-center gap-1"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <Label htmlFor={`price-${product.id}`} className="text-[10px] text-slate-500">
+          {t("sellingPrice")} ₹
+        </Label>
+        <Input
+          id={`price-${product.id}`}
+          type="number"
+          min={0}
+          step="0.01"
+          value={product.price ?? ""}
+          placeholder="0"
+          className="h-7 w-24 text-[11px]"
+          onChange={(event) => {
+            const raw = event.target.value;
+            const parsed = Number(raw);
+            onPriceChange(raw === "" || !Number.isFinite(parsed) ? undefined : parsed);
+          }}
+        />
+      </div>
       <div className="mt-2 space-y-2">
         <div className="flex gap-2">
           <Tooltip>
@@ -1506,6 +1614,7 @@ type SidebarContentProps = {
   fillNextAvailableCount: (productId: string, count: number) => void;
   fillAllPages: (productId: string) => void;
   removeProduct: (productId: string) => void;
+  updateProduct: (productId: string, patch: Partial<Omit<Product, "id" | "source">>) => void;
   selectedCellCount: number;
   popoverOpen: boolean;
   setPopoverOpen: (value: boolean) => void;
@@ -1544,6 +1653,7 @@ const SidebarContent = memo(function SidebarContent({
   fillNextAvailableCount,
   fillAllPages,
   removeProduct,
+  updateProduct,
   selectedCellCount,
   popoverOpen,
   setPopoverOpen,
@@ -1764,6 +1874,7 @@ const SidebarContent = memo(function SidebarContent({
                   onFillMany={(count) => fillNextAvailableCount(product.id, count)}
                   onFillAll={() => fillAllPages(product.id)}
                   onRemove={() => removeProduct(product.id)}
+                  onPriceChange={(price) => updateProduct(product.id, { price })}
                 />
               ))
             )}
@@ -1892,6 +2003,23 @@ const LayoutPanel = memo(function LayoutPanel({
           </SelectContent>
         </Select>
       </div>
+
+      {layout.labelTemplate === "jewellery-split" ? (
+        <>
+          <div className="space-y-2">
+            <Label htmlFor="brand-text">{t("brandText")}</Label>
+            <Input
+              id="brand-text"
+              value={layout.brandText ?? ""}
+              placeholder="ZenZebra"
+              onChange={(event) => setLayout({ ...layout, brandText: event.target.value })}
+            />
+          </div>
+          <div className="rounded-lg border border-slate-200 p-3">
+            <PrinterSelector />
+          </div>
+        </>
+      ) : null}
 
       <div className="space-y-2">
         <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">
@@ -2073,6 +2201,57 @@ const LayoutPanel = memo(function LayoutPanel({
   );
 });
 
+const formatPrice = (price: number) =>
+  Number.isInteger(price) ? String(price) : price.toFixed(2);
+
+function JewellerySplitContent({
+  product,
+  barcodeHeightPx,
+  barcodeMaxHeightPx,
+  fontSizePt,
+  brandText,
+}: {
+  product: Product;
+  barcodeHeightPx: number;
+  barcodeMaxHeightPx: number;
+  fontSizePt: number;
+  brandText: string;
+}) {
+  return (
+    <div className="flex h-full w-full items-stretch">
+      <div className="flex min-w-0 flex-1 flex-col items-center justify-center overflow-hidden">
+        <BarcodeSvg
+          value={product.barcode}
+          height={barcodeHeightPx}
+          maxHeightPx={barcodeMaxHeightPx}
+        />
+        <p
+          className="w-full truncate text-center text-slate-900"
+          style={{ fontSize: `${fontSizePt}pt`, lineHeight: 1.2 }}
+        >
+          {product.sku ? `${product.sku} ${product.name}` : product.name}
+        </p>
+      </div>
+      <div className="flex min-w-0 flex-1 flex-col items-start justify-center overflow-hidden pl-1 text-left">
+        <p
+          className="w-full truncate font-bold text-slate-900"
+          style={{ fontSize: `${fontSizePt * 1.5}pt`, lineHeight: 1.3 }}
+        >
+          {brandText}
+        </p>
+        {product.price != null ? (
+          <p
+            className="w-full truncate text-slate-900"
+            style={{ fontSize: `${fontSizePt * 1.3}pt`, lineHeight: 1.3 }}
+          >
+            {`SP = ₹${formatPrice(product.price)}`}
+          </p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 const LabelCell = memo(function LabelCell({
   labelIndex,
   product,
@@ -2091,6 +2270,8 @@ const LabelCell = memo(function LabelCell({
   barcodeMaxHeightPx,
   fontSizePt,
   paddingCm,
+  labelTemplate,
+  brandText,
 }: {
   labelIndex: number;
   product: Product | null;
@@ -2109,6 +2290,8 @@ const LabelCell = memo(function LabelCell({
   barcodeMaxHeightPx: number;
   fontSizePt: number;
   paddingCm: number;
+  labelTemplate?: "default" | "jewellery-split";
+  brandText?: string;
 }) {
   const t = useTranslations("App");
 
@@ -2133,17 +2316,29 @@ const LabelCell = memo(function LabelCell({
             <div
               className="flex w-full flex-col items-center"
             >
-              <BarcodeSvg
-                value={product.barcode}
-                height={barcodeHeightPx}
-                maxHeightPx={barcodeMaxHeightPx}
-              />
-              <p
-                className="mt-1 w-full truncate text-slate-700"
-                style={{ fontSize: `${fontSizePt}pt` }}
-              >
-                {product.name}
-              </p>
+              {labelTemplate === "jewellery-split" ? (
+                <JewellerySplitContent
+                  product={product}
+                  barcodeHeightPx={barcodeHeightPx}
+                  barcodeMaxHeightPx={barcodeMaxHeightPx}
+                  fontSizePt={fontSizePt}
+                  brandText={brandText ?? "ZenZebra"}
+                />
+              ) : (
+                <>
+                  <BarcodeSvg
+                    value={product.barcode}
+                    height={barcodeHeightPx}
+                    maxHeightPx={barcodeMaxHeightPx}
+                  />
+                  <p
+                    className="mt-1 w-full truncate text-slate-700"
+                    style={{ fontSize: `${fontSizePt}pt` }}
+                  >
+                    {product.name}
+                  </p>
+                </>
+              )}
               <Button
                 variant="ghost"
                 size="sm"
@@ -2231,19 +2426,29 @@ const PrintArea = memo(function PrintArea({
                   style={{ padding: `${paddingCm}cm`, boxSizing: "border-box" }}
                 >
                   {product ? (
-                    <>
-                      <BarcodeSvg
-                        value={product.barcode}
-                        height={barcodeHeightPx}
-                        maxHeightPx={barcodeMaxHeightPx}
+                    layout.labelTemplate === "jewellery-split" ? (
+                      <JewellerySplitContent
+                        product={product}
+                        barcodeHeightPx={barcodeHeightPx}
+                        barcodeMaxHeightPx={barcodeMaxHeightPx}
+                        fontSizePt={layout.fontSizePt ?? 7}
+                        brandText={layout.brandText ?? "ZenZebra"}
                       />
-                      <p
-                        className="mt-1 w-full truncate text-slate-700"
-                        style={{ fontSize: `${layout.fontSizePt ?? 7}pt` }}
-                      >
-                        {product.name}
-                      </p>
-                    </>
+                    ) : (
+                      <>
+                        <BarcodeSvg
+                          value={product.barcode}
+                          height={barcodeHeightPx}
+                          maxHeightPx={barcodeMaxHeightPx}
+                        />
+                        <p
+                          className="mt-1 w-full truncate text-slate-700"
+                          style={{ fontSize: `${layout.fontSizePt ?? 7}pt` }}
+                        >
+                          {product.name}
+                        </p>
+                      </>
+                    )
                   ) : null}
                 </div>
               );

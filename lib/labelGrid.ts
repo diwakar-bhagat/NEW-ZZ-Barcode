@@ -11,6 +11,8 @@ export type LayoutSettings = {
   cellPaddingCm?: number;
   offsetXCm?: number;
   offsetYCm?: number;
+  labelTemplate?: "default" | "jewellery-split";
+  brandText?: string;
 };
 
 export type GridMetrics = {
