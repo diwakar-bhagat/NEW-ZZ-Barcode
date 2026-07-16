@@ -8,7 +8,9 @@ export type Product = {
   barcode: string;
   sku?: string;
   price?: number;
-  source: "manual" | "odoo";
+  /** Per-product brand override; the jewellery template falls back to layout.brandText. */
+  brand?: string;
+  source: "manual" | "odoo" | "import";
 };
 
 export type Cell = {
@@ -36,6 +38,17 @@ type EditorState = {
   syncPages: (labelsPerPage: number, pagesToRender?: number) => void;
   addProduct: (product: Product) => void;
   updateProduct: (productId: string, patch: Partial<Omit<Product, "id" | "source">>) => void;
+  importProducts: (
+    items: {
+      name: string;
+      sku?: string;
+      barcode: string;
+      price?: number;
+      brand?: string;
+      copies: number;
+    }[],
+    labelsPerPage: number,
+  ) => void;
   setActiveProductId: (productId: string | null) => void;
   setSelectedCellIds: (cellIds: string[]) => void;
   toggleCellSelection: (cellId: string, range?: string[]) => void;
@@ -143,6 +156,49 @@ export const useEditorStore = create<EditorState>((set) => ({
         product.id === productId ? { ...product, ...patch } : product,
       ),
     })),
+  importProducts: (items, labelsPerPage) =>
+    set((state) => {
+      const perPage = Math.max(1, labelsPerPage);
+      const stamp = Date.now();
+      // One product identity per item — quantity only decides how many cells
+      // reference it (copies), never how many products exist.
+      const products: Product[] = items.map((item, index) => ({
+        id: `import-${stamp}-${index}`,
+        name: item.name,
+        barcode: item.barcode,
+        sku: item.sku,
+        price: item.price,
+        brand: item.brand,
+        source: "import",
+      }));
+      // Expand copies into a flat queue of product ids, then lay them into
+      // the existing page/cell grid.
+      const queue: string[] = [];
+      items.forEach((item, index) => {
+        for (let copy = 0; copy < item.copies; copy += 1) {
+          queue.push(products[index].id);
+        }
+      });
+      const pagesNeeded = Math.max(1, Math.ceil(queue.length / perPage));
+      let cursor = 0;
+      const pages: Page[] = Array.from({ length: pagesNeeded }).map((_, pageIndex) => ({
+        id: `page-${pageIndex}`,
+        cells: Array.from({ length: perPage }).map((__, cellIndex) => ({
+          id: `page-${pageIndex}-cell-${cellIndex}`,
+          productId: cursor < queue.length ? queue[cursor++] : null,
+        })),
+      }));
+      return {
+        products: [...products, ...state.products],
+        pages,
+        pagesToRender: pagesNeeded,
+        activeProductId: products[0]?.id ?? state.activeProductId,
+        selectedCellIds: [],
+        lastSelectedCellId: null,
+        history: [],
+        future: [],
+      };
+    }),
   setActiveProductId: (productId) => set({ activeProductId: productId }),
   setSelectedCellIds: (cellIds) =>
     set({ selectedCellIds: cellIds, lastSelectedCellId: cellIds.at(-1) ?? null }),

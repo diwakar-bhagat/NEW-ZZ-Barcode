@@ -22,6 +22,7 @@ import BarcodeSvg from "@/components/BarcodeSvg";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import PrintPageStyle from "@/components/PrintPageStyle";
 import PrinterSelector from "@/components/PrinterSelector";
+import ExcelImport from "@/components/ExcelImport";
 import { getSavedPrinter } from "@/hooks/useQZ";
 import { printRaw, QzError } from "@/services/qz";
 import { generateTsplBatch, type TsplLabel } from "@/lib/tspl";
@@ -668,7 +669,7 @@ export default function AppPage() {
             name: product.name,
             sku: product.sku,
             price: product.price,
-            brand: layout.brandText,
+            brand: product.brand ?? layout.brandText,
           });
         }
       }
@@ -1848,6 +1849,7 @@ const SidebarContent = memo(function SidebarContent({
           </div>
         </TabsContent>
       </Tabs>
+      <ExcelImport />
       {!isMobile ? (
         <div className="space-y-3">
           <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-500">
@@ -2237,7 +2239,7 @@ function JewellerySplitContent({
           className="w-full truncate font-bold text-slate-900"
           style={{ fontSize: `${fontSizePt * 1.5}pt`, lineHeight: 1.3 }}
         >
-          {brandText}
+          {product.brand ?? brandText}
         </p>
         {product.price != null ? (
           <p
