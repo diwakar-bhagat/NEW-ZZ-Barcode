@@ -3,16 +3,22 @@
 import JsBarcode from "jsbarcode";
 import { useEffect, useRef } from "react";
 
-const detectBarcodeFormat = (value: string): string => {
-  const cleaned = value.replace(/\D/g, "");
-  if (cleaned.length === 13) {
+// Pick a symbology from the WHOLE (trimmed) value. EAN/UPC only accept digits
+// of an exact length, so anything with letters/symbols or another length is
+// CODE128 — which supports the full ASCII set (e.g. "KNITAHDBG88979570").
+//
+// Note: the previous version stripped non-digits first and matched on the
+// digit count, so "KNITAHDBG88979570" (8 embedded digits) was mis-detected as
+// EAN8 and failed to render.
+export const detectBarcodeFormat = (value: string): string => {
+  if (/^\d{13}$/.test(value)) {
     return "EAN13";
   }
-  if (cleaned.length === 8) {
-    return "EAN8";
-  }
-  if (cleaned.length === 12) {
+  if (/^\d{12}$/.test(value)) {
     return "UPC";
+  }
+  if (/^\d{8}$/.test(value)) {
+    return "EAN8";
   }
   return "CODE128";
 };
@@ -29,20 +35,23 @@ export default function BarcodeSvg({
   const svgRef = useRef<SVGSVGElement | null>(null);
 
   useEffect(() => {
-    if (!svgRef.current || !value) {
+    const svg = svgRef.current;
+    const trimmed = value.trim();
+    if (!svg || !trimmed) {
+      if (svg) {
+        svg.innerHTML = "";
+      }
       return;
     }
-    try {
-      const format = detectBarcodeFormat(value);
-      const svg = svgRef.current;
-      JsBarcode(svg, value, {
+
+    const render = (format: string) => {
+      JsBarcode(svg, trimmed, {
         format,
         displayValue: true,
         height,
         margin: 2,
-        width: format === "EAN13" || format === "EAN8" || format === "UPC" ? 1.5 : 2,
-        // Bold, larger human-readable number so it scans and reads clearly at
-        // small physical sizes (was thin/light at fontSize 10).
+        width: format === "CODE128" ? 2 : 1.5,
+        // Bold, larger human-readable number so it reads clearly at small sizes.
         fontSize: 18,
         fontOptions: "bold",
         textAlign: "center",
@@ -60,8 +69,18 @@ export default function BarcodeSvg({
         svg.removeAttribute("width");
         svg.removeAttribute("height");
       }
+    };
+
+    try {
+      render(detectBarcodeFormat(trimmed));
     } catch {
-      svgRef.current.innerHTML = "";
+      // Fall back to CODE128 (accepts any ASCII) — e.g. a 13-digit value with
+      // an invalid EAN checksum would otherwise render blank.
+      try {
+        render("CODE128");
+      } catch {
+        svg.innerHTML = "";
+      }
     }
   }, [value, height]);
 
