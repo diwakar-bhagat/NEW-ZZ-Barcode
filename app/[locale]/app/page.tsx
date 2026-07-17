@@ -150,6 +150,28 @@ const PRESET_LAYOUTS: { id: string; labelKey: string; values: Partial<LayoutSett
       brandText: "ZenZebra",
     },
   },
+  {
+    // 6 jewellery labels per A4 page for one-click browser printing / Save-as-PDF.
+    // 1 column × 6 rows: the row gap is tuned so computeGrid floors to exactly 6.
+    id: "a4-jewellery-6up",
+    labelKey: "layoutPresetA4Jewellery6",
+    values: {
+      paperWidthCm: 21,
+      paperHeightCm: 29.7,
+      marginCm: 1,
+      labelWidthCm: 10,
+      labelHeightCm: 1.5,
+      gapXCm: 0,
+      gapYCm: 2.8,
+      cellPaddingCm: 0.1,
+      offsetXCm: 0,
+      offsetYCm: 0,
+      barcodeHeightMm: 8,
+      fontSizePt: 8,
+      labelTemplate: "jewellery-split",
+      brandText: "ZenZebra",
+    },
+  },
 ];
 
 const useDebouncedValue = (value: string, delayMs: number) => {

@@ -229,6 +229,7 @@
     "layoutPresetA4_3x8": "A4 3x8 (70×35mm)",
     "layoutPresetA4_2x7": "A4 2x7 (99×38mm)",
     "layoutPresetRollJewellery": "Rollo joyería 100×15mm (55mm imprimible)",
+    "layoutPresetA4Jewellery6": "A4 joyería — 6 por página (PDF/imprimir)",
     "brandText": "Marca en la etiqueta",
     "sellingPrice": "PV",
     "qzPrinter": "Impresora térmica (QZ Tray)",

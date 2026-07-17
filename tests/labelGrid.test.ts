@@ -52,6 +52,22 @@ describe("computeGrid", () => {
     expect(grid.labelsPerPage).toBe(1);
   });
 
+  it("yields exactly 6 labels per page for the A4 6-up jewellery preset", () => {
+    const grid = computeGrid({
+      paperWidthCm: 21,
+      paperHeightCm: 29.7,
+      marginCm: 1,
+      labelWidthCm: 10,
+      labelHeightCm: 1.5,
+      gapXCm: 0,
+      gapYCm: 2.8,
+    });
+
+    expect(grid.columns).toBe(1);
+    expect(grid.rows).toBe(6);
+    expect(grid.labelsPerPage).toBe(6);
+  });
+
   it("clamps negative values to zero", () => {
     const grid = computeGrid({
       paperWidthCm: 21,
