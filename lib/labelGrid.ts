@@ -13,6 +13,7 @@ export type LayoutSettings = {
   offsetYCm?: number;
   labelTemplate?: "default" | "jewellery-split";
   brandText?: string;
+  nameAlign?: "left" | "center" | "right";
 };
 
 export type GridMetrics = {

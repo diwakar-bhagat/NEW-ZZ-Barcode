@@ -1337,6 +1337,7 @@ export default function AppPage() {
                           paddingCm={cellPaddingCm}
                           labelTemplate={layout.labelTemplate}
                           brandText={layout.brandText}
+                          nameAlign={layout.nameAlign}
                         />
                       );
                     })}
@@ -2184,6 +2185,24 @@ const LayoutPanel = memo(function LayoutPanel({
               onChange={(event) => setLayout({ ...layout, fontSizePt: Number(event.target.value) })}
             />
           </div>
+          <div className="space-y-2">
+            <Label>{t("layoutNameAlign")}</Label>
+            <Select
+              value={layout.nameAlign ?? "center"}
+              onValueChange={(value) =>
+                setLayout({ ...layout, nameAlign: value as "left" | "center" | "right" })
+              }
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="left">{t("alignLeft")}</SelectItem>
+                <SelectItem value="center">{t("alignCenter")}</SelectItem>
+                <SelectItem value="right">{t("alignRight")}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </div>
 
@@ -2206,18 +2225,25 @@ const LayoutPanel = memo(function LayoutPanel({
 const formatPrice = (price: number) =>
   Number.isInteger(price) ? String(price) : price.toFixed(2);
 
+type NameAlign = "left" | "center" | "right";
+
+const nameAlignClass = (align?: NameAlign): string =>
+  align === "left" ? "text-left" : align === "right" ? "text-right" : "text-center";
+
 function JewellerySplitContent({
   product,
   barcodeHeightPx,
   barcodeMaxHeightPx,
   fontSizePt,
   brandText,
+  nameAlign,
 }: {
   product: Product;
   barcodeHeightPx: number;
   barcodeMaxHeightPx: number;
   fontSizePt: number;
   brandText: string;
+  nameAlign?: NameAlign;
 }) {
   return (
     <div className="flex h-full w-full items-stretch">
@@ -2228,7 +2254,7 @@ function JewellerySplitContent({
           maxHeightPx={barcodeMaxHeightPx}
         />
         <p
-          className="w-full truncate text-center text-slate-900"
+          className={`w-full truncate text-slate-900 ${nameAlignClass(nameAlign)}`}
           style={{ fontSize: `${fontSizePt}pt`, lineHeight: 1.2 }}
         >
           {product.sku ? `${product.sku} ${product.name}` : product.name}
@@ -2274,6 +2300,7 @@ const LabelCell = memo(function LabelCell({
   paddingCm,
   labelTemplate,
   brandText,
+  nameAlign,
 }: {
   labelIndex: number;
   product: Product | null;
@@ -2294,6 +2321,7 @@ const LabelCell = memo(function LabelCell({
   paddingCm: number;
   labelTemplate?: "default" | "jewellery-split";
   brandText?: string;
+  nameAlign?: NameAlign;
 }) {
   const t = useTranslations("App");
 
@@ -2325,6 +2353,7 @@ const LabelCell = memo(function LabelCell({
                   barcodeMaxHeightPx={barcodeMaxHeightPx}
                   fontSizePt={fontSizePt}
                   brandText={brandText ?? "ZenZebra"}
+                  nameAlign={nameAlign}
                 />
               ) : (
                 <>
@@ -2334,7 +2363,7 @@ const LabelCell = memo(function LabelCell({
                     maxHeightPx={barcodeMaxHeightPx}
                   />
                   <p
-                    className="mt-1 w-full truncate text-slate-700"
+                    className={`mt-1 w-full truncate text-slate-700 ${nameAlignClass(nameAlign)}`}
                     style={{ fontSize: `${fontSizePt}pt` }}
                   >
                     {product.name}
@@ -2435,6 +2464,7 @@ const PrintArea = memo(function PrintArea({
                         barcodeMaxHeightPx={barcodeMaxHeightPx}
                         fontSizePt={layout.fontSizePt ?? 7}
                         brandText={layout.brandText ?? "ZenZebra"}
+                        nameAlign={layout.nameAlign}
                       />
                     ) : (
                       <>
@@ -2444,7 +2474,7 @@ const PrintArea = memo(function PrintArea({
                           maxHeightPx={barcodeMaxHeightPx}
                         />
                         <p
-                          className="mt-1 w-full truncate text-slate-700"
+                          className={`mt-1 w-full truncate text-slate-700 ${nameAlignClass(layout.nameAlign)}`}
                           style={{ fontSize: `${layout.fontSizePt ?? 7}pt` }}
                         >
                           {product.name}

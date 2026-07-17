@@ -41,7 +41,10 @@ export default function BarcodeSvg({
         height,
         margin: 2,
         width: format === "EAN13" || format === "EAN8" || format === "UPC" ? 1.5 : 2,
-        fontSize: 10,
+        // Bold, larger human-readable number so it scans and reads clearly at
+        // small physical sizes (was thin/light at fontSize 10).
+        fontSize: 18,
+        fontOptions: "bold",
         textAlign: "center",
         textPosition: "bottom",
         textMargin: 2,
