@@ -45,19 +45,26 @@ export default function BarcodeSvg({
     }
 
     const render = (format: string) => {
+      const moduleWidth = format === "CODE128" ? 2 : 1.5;
       JsBarcode(svg, trimmed, {
         format,
         displayValue: true,
         height,
-        margin: 2,
-        width: format === "CODE128" ? 2 : 1.5,
+        // Quiet zone: EAN/UPC need ~11 blank modules on the left (7 on the
+        // right) and CODE128 ~10, or scanners can't lock onto the edges and a
+        // perfectly-valid barcode won't scan. The old margin of 2px was ~1
+        // module — the root cause of "renders but won't scan".
+        margin: Math.round(moduleWidth * 11),
+        width: moduleWidth,
         // Bold, larger human-readable number so it reads clearly at small sizes.
         fontSize: 18,
         fontOptions: "bold",
         textAlign: "center",
         textPosition: "bottom",
         textMargin: 2,
-        background: "transparent",
+        // Solid white background so the quiet zone has real contrast (a
+        // transparent quiet zone over any tint degrades scanning).
+        background: "#ffffff",
         lineColor: "#000000",
       });
       // JsBarcode sets fixed px width/height; swap them for a viewBox so the
