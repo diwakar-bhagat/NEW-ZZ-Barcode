@@ -8,6 +8,8 @@
 // Note: TSPL internal fonts are ASCII-only, so the rupee sign is printed as
 // "Rs." (the on-screen preview shows the real ₹ symbol).
 
+import { resolveLabelLayout, type LabelLayoutMode } from "./labelLayout";
+
 export type TsplLabel = {
   barcode: string;
   name: string;
@@ -25,9 +27,10 @@ export type TsplOptions = {
   dotsPerMm?: number;
   density?: number;
   speed?: number;
+  layoutMode?: LabelLayoutMode;
 };
 
-const DEFAULTS: Required<TsplOptions> = {
+const DEFAULTS = {
   widthMm: 100,
   heightMm: 15,
   gapMm: 2,
@@ -35,6 +38,7 @@ const DEFAULTS: Required<TsplOptions> = {
   dotsPerMm: 8,
   density: 8,
   speed: 3,
+  layoutMode: "auto" as LabelLayoutMode,
 };
 
 // TSPL strings cannot contain double quotes; drop anything non-ASCII too,
@@ -73,19 +77,11 @@ export function generateTSPL(label: TsplLabel, options: TsplOptions = {}): strin
   const nameLine = sanitize(label.sku ? `${label.sku} ${label.name}` : label.name);
   const brand = sanitize(label.brand ?? "ZenZebra");
   const priceLine = label.price != null ? `SP = Rs.${formatPrice(label.price)}` : "";
+  const type = barcodeType(barcode);
 
-  // Left half: barcode (with human-readable number centered under it) at the
-  // top, SKU/name line under it. Font "1" is 8x12 dots (~1.5mm tall).
-  const barcodeHeight = 48; // 6mm of bars
-  const barcodeX = margin;
-  const barcodeY = 10;
-  const nameY = barcodeY + barcodeHeight + 26; // bars + human-readable line
-
-  // Right half: brand bold on top, price under it. Font "2" is 12x20 dots;
-  // bold is approximated by printing twice with a 1-dot offset.
-  const rightX = halfW + 12;
-  const brandY = 18;
-  const priceY = brandY + 46;
+  // Same adaptive engine as the on-screen preview / PDF: long barcodes take the
+  // full printable width and drop the brand; short ones keep the split layout.
+  const resolved = resolveLabelLayout(opts.layoutMode, barcode, opts.printableMm);
 
   const lines = [
     `SIZE ${opts.widthMm} mm,${opts.heightMm} mm`,
@@ -95,23 +91,52 @@ export function generateTSPL(label: TsplLabel, options: TsplOptions = {}): strin
     `DENSITY ${opts.density}`,
     `SPEED ${opts.speed}`,
     "CLS",
-    `BARCODE ${barcodeX},${barcodeY},"${barcodeType(barcode)}",${barcodeHeight},2,0,2,4,"${barcode}"`,
   ];
 
-  if (nameLine) {
-    lines.push(`TEXT ${barcodeX},${nameY},"1",0,1,1,"${nameLine}"`);
-  }
-  if (brand) {
-    lines.push(`TEXT ${rightX},${brandY},"2",0,1,1,"${brand}"`);
-    lines.push(`TEXT ${rightX + 1},${brandY},"2",0,1,1,"${brand}"`);
-  }
-  if (priceLine) {
-    lines.push(`TEXT ${rightX},${priceY},"2",0,1,1,"${sanitize(priceLine)}"`);
+  if (resolved.mode === "fullWidth") {
+    // Barcode spans the full printable body; number + name + SP stacked below.
+    // EAN/UPC get a wider module (narrow 3) since they're fixed-length; CODE128
+    // (which may be long) uses narrow 2 to fit more data in the width.
+    const narrow = type === "128" ? 2 : 3;
+    const barcodeHeight = 56; // ~7mm of bars
+    const barcodeY = 8;
+    const nameY = barcodeY + barcodeHeight + 24; // bars + human-readable number
+    const priceY = nameY + 22;
+    lines.push(
+      `BARCODE ${margin},${barcodeY},"${type}",${barcodeHeight},2,0,${narrow},${narrow},"${barcode}"`,
+    );
+    if (nameLine) {
+      lines.push(`TEXT ${margin},${nameY},"1",0,1,1,"${nameLine}"`);
+    }
+    if (priceLine) {
+      lines.push(`TEXT ${margin},${priceY},"2",0,1,1,"${sanitize(priceLine)}"`);
+    }
+  } else {
+    // Split: barcode + name left, brand + price right (today's layout).
+    const barcodeHeight = 48; // 6mm of bars
+    const barcodeY = 10;
+    const nameY = barcodeY + barcodeHeight + 26;
+    const rightX = halfW + 12;
+    const brandY = 18;
+    const priceY = brandY + 46;
+    lines.push(
+      `BARCODE ${margin},${barcodeY},"${type}",${barcodeHeight},2,0,2,4,"${barcode}"`,
+    );
+    if (nameLine) {
+      lines.push(`TEXT ${margin},${nameY},"1",0,1,1,"${nameLine}"`);
+    }
+    if (brand) {
+      // Bold approximated by over-printing with a 1-dot offset.
+      lines.push(`TEXT ${rightX},${brandY},"2",0,1,1,"${brand}"`);
+      lines.push(`TEXT ${rightX + 1},${brandY},"2",0,1,1,"${brand}"`);
+    }
+    if (priceLine) {
+      lines.push(`TEXT ${rightX},${priceY},"2",0,1,1,"${sanitize(priceLine)}"`);
+    }
   }
 
-  // Guard: nothing may print past the body into the tail (x >= printableW)
-  // or below the label (y >= heightDots). Coordinates above are constants
-  // within bounds; this comment documents the invariant for future edits.
+  // Guard: nothing prints past the body into the tail (x >= printableW) or below
+  // the label (y >= heightDots). Coordinates above stay within bounds.
   void heightDots;
 
   lines.push(`PRINT ${Math.max(1, label.copies ?? 1)}`);

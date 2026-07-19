@@ -52,4 +52,29 @@ describe("generateTSPL", () => {
     expect((batch.match(/SIZE 100 mm,15 mm/g) ?? []).length).toBe(2);
     expect((batch.match(/PRINT 1/g) ?? []).length).toBe(2);
   });
+
+  it("auto layout drops the brand and spans full width for a long barcode", () => {
+    // EAN13 doesn't fit the 55mm split half → full width, no brand.
+    const tspl = generateTSPL({
+      barcode: "9555028703736",
+      name: "Perfume",
+      price: 1200,
+      brand: "ZenZebra",
+    });
+    expect(tspl).toContain('"9555028703736"');
+    expect(tspl).not.toContain("ZenZebra"); // brand collapses
+    expect(tspl).toContain("SP = Rs.1200"); // price stays
+    // Full-width EAN uses a wider module (narrow 3).
+    expect(tspl).toMatch(/BARCODE \d+,\d+,"EAN13",\d+,2,0,3,3,/);
+  });
+
+  it("keeps the split layout (brand present) for a short code", () => {
+    const tspl = generateTSPL(label); // "101860" → 68 modules → split
+    expect(tspl).toContain("ZenZebra");
+  });
+
+  it("respects an explicit full-width mode even for a short code", () => {
+    const tspl = generateTSPL(label, { layoutMode: "fullWidth" });
+    expect(tspl).not.toContain("ZenZebra");
+  });
 });

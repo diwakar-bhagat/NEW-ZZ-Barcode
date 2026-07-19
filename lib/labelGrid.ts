@@ -14,6 +14,7 @@ export type LayoutSettings = {
   labelTemplate?: "default" | "jewellery-split";
   brandText?: string;
   nameAlign?: "left" | "center" | "right";
+  labelLayoutMode?: "auto" | "split" | "fullWidth";
 };
 
 export type GridMetrics = {

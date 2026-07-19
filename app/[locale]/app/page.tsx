@@ -66,6 +66,7 @@ import {
   useEditorStore,
 } from "@/lib/editorStore";
 import { computeGrid, type LayoutSettings } from "@/lib/labelGrid";
+import { resolveLabelLayout, type LabelLayoutMode } from "@/lib/labelLayout";
 import { trackPageView, trackStartPrint } from "@/lib/analytics";
 
 type SearchResult = {
@@ -706,6 +707,8 @@ export default function AppPage() {
       const tspl = generateTsplBatch(labels, {
         widthMm: layout.paperWidthCm * 10,
         heightMm: layout.paperHeightCm * 10,
+        printableMm: layout.labelWidthCm * 10,
+        layoutMode: layout.labelLayoutMode,
       });
       await printRaw(printer, tspl);
       toast.success(t("qzPrintDone", { count: labels.length }), { id: toastId });
@@ -1360,6 +1363,8 @@ export default function AppPage() {
                           labelTemplate={layout.labelTemplate}
                           brandText={layout.brandText}
                           nameAlign={layout.nameAlign}
+                          layoutMode={layout.labelLayoutMode}
+                          labelWidthMm={layout.labelWidthCm * 10}
                         />
                       );
                     })}
@@ -2032,6 +2037,25 @@ const LayoutPanel = memo(function LayoutPanel({
       {layout.labelTemplate === "jewellery-split" ? (
         <>
           <div className="space-y-2">
+            <Label>{t("layoutMode")}</Label>
+            <Select
+              value={layout.labelLayoutMode ?? "auto"}
+              onValueChange={(value) =>
+                setLayout({ ...layout, labelLayoutMode: value as "auto" | "split" | "fullWidth" })
+              }
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto">{t("layoutModeAuto")}</SelectItem>
+                <SelectItem value="split">{t("layoutModeSplit")}</SelectItem>
+                <SelectItem value="fullWidth">{t("layoutModeFullWidth")}</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-slate-500">{t("layoutModeHint")}</p>
+          </div>
+          <div className="space-y-2">
             <Label htmlFor="brand-text">{t("brandText")}</Label>
             <Input
               id="brand-text"
@@ -2259,6 +2283,8 @@ function JewellerySplitContent({
   fontSizePt,
   brandText,
   nameAlign,
+  layoutMode,
+  labelWidthMm,
 }: {
   product: Product;
   barcodeHeightPx: number;
@@ -2266,7 +2292,42 @@ function JewellerySplitContent({
   fontSizePt: number;
   brandText: string;
   nameAlign?: NameAlign;
+  layoutMode?: LabelLayoutMode;
+  labelWidthMm: number;
 }) {
+  const resolved = resolveLabelLayout(layoutMode ?? "auto", product.barcode, labelWidthMm);
+  const nameLine = product.sku ? `${product.sku} ${product.name}` : product.name;
+  const priceLine = product.price != null ? `SP = ₹${formatPrice(product.price)}` : null;
+
+  // Full width: barcode spans the whole label (best for long/dense codes), the
+  // brand collapses, and the name + selling price stack underneath.
+  if (resolved.mode === "fullWidth") {
+    return (
+      <div className="flex h-full w-full flex-col items-center justify-center overflow-hidden">
+        <BarcodeSvg
+          value={product.barcode}
+          height={barcodeHeightPx}
+          maxHeightPx={barcodeMaxHeightPx}
+        />
+        <p
+          className={`w-full truncate text-slate-900 ${nameAlignClass(nameAlign)}`}
+          style={{ fontSize: `${fontSizePt}pt`, lineHeight: 1.15 }}
+        >
+          {nameLine}
+        </p>
+        {priceLine ? (
+          <p
+            className={`w-full truncate font-semibold text-slate-900 ${nameAlignClass(nameAlign)}`}
+            style={{ fontSize: `${fontSizePt * 1.1}pt`, lineHeight: 1.15 }}
+          >
+            {priceLine}
+          </p>
+        ) : null}
+      </div>
+    );
+  }
+
+  // Split: today's layout — barcode + name on the left, brand + SP on the right.
   return (
     <div className="flex h-full w-full items-stretch">
       <div className="flex min-w-0 flex-1 flex-col items-center justify-center overflow-hidden">
@@ -2279,7 +2340,7 @@ function JewellerySplitContent({
           className={`w-full truncate text-slate-900 ${nameAlignClass(nameAlign)}`}
           style={{ fontSize: `${fontSizePt}pt`, lineHeight: 1.2 }}
         >
-          {product.sku ? `${product.sku} ${product.name}` : product.name}
+          {nameLine}
         </p>
       </div>
       <div className="flex min-w-0 flex-1 flex-col items-start justify-center overflow-hidden pl-1 text-left">
@@ -2289,12 +2350,12 @@ function JewellerySplitContent({
         >
           {product.brand ?? brandText}
         </p>
-        {product.price != null ? (
+        {priceLine ? (
           <p
             className="w-full truncate text-slate-900"
             style={{ fontSize: `${fontSizePt * 1.3}pt`, lineHeight: 1.3 }}
           >
-            {`SP = ₹${formatPrice(product.price)}`}
+            {priceLine}
           </p>
         ) : null}
       </div>
@@ -2323,6 +2384,8 @@ const LabelCell = memo(function LabelCell({
   labelTemplate,
   brandText,
   nameAlign,
+  layoutMode,
+  labelWidthMm,
 }: {
   labelIndex: number;
   product: Product | null;
@@ -2344,6 +2407,8 @@ const LabelCell = memo(function LabelCell({
   labelTemplate?: "default" | "jewellery-split";
   brandText?: string;
   nameAlign?: NameAlign;
+  layoutMode?: LabelLayoutMode;
+  labelWidthMm: number;
 }) {
   const t = useTranslations("App");
 
@@ -2376,6 +2441,8 @@ const LabelCell = memo(function LabelCell({
                   fontSizePt={fontSizePt}
                   brandText={brandText ?? "ZenZebra"}
                   nameAlign={nameAlign}
+                  layoutMode={layoutMode}
+                  labelWidthMm={labelWidthMm}
                 />
               ) : (
                 <>
@@ -2487,6 +2554,8 @@ const PrintArea = memo(function PrintArea({
                         fontSizePt={layout.fontSizePt ?? 7}
                         brandText={layout.brandText ?? "ZenZebra"}
                         nameAlign={layout.nameAlign}
+                        layoutMode={layout.labelLayoutMode}
+                        labelWidthMm={layout.labelWidthCm * 10}
                       />
                     ) : (
                       <>
